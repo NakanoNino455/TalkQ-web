@@ -1,16 +1,39 @@
 import type { AppSettings, ChatMessage, Conversation } from "@/types";
-import { DEFAULT_SETTINGS, STORAGE_KEYS } from "./constants";
+import { DEFAULT_SETTINGS, LEGACY_STORAGE_KEYS, STORAGE_KEYS } from "./constants";
 
 /**
  * localStorage persistence. This is the *only* datastore in the app:
  *
- *   nexq_deepseek_api_key  — the user's DeepSeek key (never leaves the browser
- *                            except in the Authorization header to DeepSeek)
- *   nexq_settings          — UI + request preferences
- *   nexq_chat_history      — conversations / messages, including image data URLs
+ *   talkq_deepseek_api_key  — the user's DeepSeek key (never leaves the browser
+ *                             except in the Authorization header to DeepSeek)
+ *   talkq_settings          — UI + request preferences
+ *   talkq_chat_history      — conversations / messages, including image data URLs
+ *   talkq_translate_transcript — live-translation subtitles
  *
  * No .env, no server-side secret, nothing committed to the repository.
  */
+
+/**
+ * One-time move from the pre-rename `nexq_*` keys. The old entries are left in
+ * place (harmless, and they keep working if someone rolls back a deployment).
+ */
+export function migrateLegacyStorage(): void {
+  const pairs: Array<[string, string]> = [
+    [LEGACY_STORAGE_KEYS.apiKey, STORAGE_KEYS.apiKey],
+    [LEGACY_STORAGE_KEYS.settings, STORAGE_KEYS.settings],
+    [LEGACY_STORAGE_KEYS.chatHistory, STORAGE_KEYS.chatHistory],
+    [LEGACY_STORAGE_KEYS.transcript, STORAGE_KEYS.transcript],
+  ];
+  for (const [legacyKey, newKey] of pairs) {
+    try {
+      if (window.localStorage.getItem(newKey) !== null) continue;
+      const value = window.localStorage.getItem(legacyKey);
+      if (value !== null) window.localStorage.setItem(newKey, value);
+    } catch {
+      /* private mode / quota — nothing to migrate */
+    }
+  }
+}
 
 function safeGet(key: string): string | null {
   try {

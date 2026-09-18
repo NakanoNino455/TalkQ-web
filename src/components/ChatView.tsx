@@ -192,7 +192,7 @@ function EmptyState({
       </div>
 
       <h2 className="mt-4 text-xl font-semibold tracking-tight text-foreground">
-        NexQ Web
+        TalkQ Web
       </h2>
       <p className="mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
         A 100% browser-side DeepSeek client. Your key lives in this browser only — requests go

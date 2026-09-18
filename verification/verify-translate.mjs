@@ -15,7 +15,6 @@ import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.
@@ -28,12 +27,11 @@ try {
 } catch {
   console.error(
     "This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned\n" +
-      "It drives the built dist/ bundle in your installed Chrome with a fake microphone and a\n" +
-      "mock of https://api.deepseek.com, so no API key and no real mic are required."
+      "It drives the built dist/ bundle in your installed Chrome against a local mock of\n" +
+      "https://api.deepseek.com, so no API key is required."
   );
   process.exit(2);
 }
-
 const PROJECT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(PROJECT, "dist");
 const BASE = "/nexq-web/";
@@ -229,12 +227,12 @@ async function newContext(grantMic) {
   await context.addInitScript(() => {
     // Seed once per browser session: a reload must NOT wipe what the app saved.
     if (!sessionStorage.getItem("nexq-e2e-seeded")) {
-      localStorage.setItem("nexq_deepseek_api_key", "sk-translate-e2e-1234567890");
+      localStorage.setItem("talkq_deepseek_api_key", "sk-translate-e2e-1234567890");
       localStorage.setItem(
-        "nexq_settings",
+        "talkq_settings",
         JSON.stringify({ lastView: "translate", livePreview: true, translateQuickMode: true })
       );
-      localStorage.removeItem("nexq_translate_transcript");
+      localStorage.removeItem("talkq_translate_transcript");
       sessionStorage.setItem("nexq-e2e-seeded", "1");
     }
 
@@ -592,8 +590,8 @@ try {
     viewport: { width: 1280, height: 800 },
   });
   await denied.addInitScript(() => {
-    localStorage.setItem("nexq_deepseek_api_key", "sk-translate-e2e-1234567890");
-    localStorage.setItem("nexq_settings", JSON.stringify({ lastView: "translate" }));
+    localStorage.setItem("talkq_deepseek_api_key", "sk-translate-e2e-1234567890");
+    localStorage.setItem("talkq_settings", JSON.stringify({ lastView: "translate" }));
   });
   const deniedPage = await denied.newPage();
   await deniedPage.goto(APP_URL, { waitUntil: "networkidle" });

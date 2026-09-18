@@ -10,6 +10,7 @@ import { TopBar } from "@/components/TopBar";
 import { TranslateView } from "@/components/TranslateView";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
+import { migrateLegacyStorage } from "@/lib/storage";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTranslateStore } from "@/stores/translateStore";
@@ -42,6 +43,8 @@ export default function App() {
   const askOpen = settings.askPanelOpen;
 
   useEffect(() => {
+    // Pre-rename installs keep their key/history: nexq_* -> talkq_* (once).
+    migrateLegacyStorage();
     hydrateSettings();
     hydrateChats();
     hydrateTranscript();

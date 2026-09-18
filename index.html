@@ -2,7 +2,10 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -14,9 +17,9 @@
     <meta name="theme-color" content="#080c16" />
     <meta
       name="description"
-      content="NexQ Web — 浏览器端实时语音翻译 + DeepSeek 客户端。DeepSeek Flash、1M 上下文、双语字幕。API Key 只存在你的浏览器里。"
+      content="TalkQ — 浏览器端实时语音翻译 + DeepSeek 客户端。DeepSeek Flash、1M 上下文、双语字幕。API Key 只存在你的浏览器里。"
     />
-    <title>NexQ Web — DeepSeek Client</title>
+    <title>TalkQ — 实时语音翻译 · DeepSeek</title>
     <style>
       html,
       body {
@@ -33,7 +36,7 @@
       select {
         font-size: 16px;
       }
-      #nexq-splash {
+      #talkq-splash {
         position: fixed;
         inset: 0;
         display: flex;
@@ -49,7 +52,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="nexq-splash">NexQ</div>
+    <div id="talkq-splash">TalkQ</div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

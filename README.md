@@ -1,4 +1,4 @@
-# NexQ Web
+# TalkQ
 
 **100% 浏览器端的实时语音翻译 + DeepSeek 对话客户端。**
 把 NexQ 的前端 UI/UX 保留下来，去掉全部桌面后端：没有 Tauri、没有 Rust、没有 Node 服务、没有 API Proxy、没有数据库。构建产物 `dist/` 是纯静态文件，直接丢到 GitHub Pages 就能用。
@@ -7,7 +7,7 @@
 
 [![Deploy to GitHub Pages](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml)
 
-![NexQ Web 对话界面](docs/screenshot.png)
+![TalkQ 界面](docs/screenshot.png)
 
 <details>
 <summary>手机端截图（底部标签：字幕 / 问答 / 底部操作面板）</summary>
@@ -66,9 +66,30 @@ has been blocked by CORS policy
 | --- | --- | --- |
 | **开发模式（推荐）** | `npm install` → `npm run dev` | 会自动打开浏览器；改代码即时热更新 |
 | **本地预览产物** | `npm run build` → `npm run preview` | 跑真实 `dist/` 产物 |
-| **单文件版（免安装、可双击）** | `npm run build:standalone` → 双击 `dist-standalone/nexq-web.html` | 一个 535KB 的自包含 HTML，CSS/JS/图标全部内联，双击即用，也可以直接发给别人 |
+| **单文件版（免安装、可双击）** | `npm run build:standalone` → 双击 `dist-standalone/talkq.html` | 一个 755KB 的自包含 HTML（图标已内联），CSS/JS/图标全部内联，双击即用，也可以直接发给别人 |
 
 > 单文件版同样只访问 `https://api.deepseek.com`，Key 存在该页面的 localStorage 里。它只是额外的便利产物；`dist/` 仍是部署 GitHub Pages 的标准产物。
+
+### 应用图标
+
+图标是从一张源图生成的（默认 `C:\Users\Administrator\Pictures\general-profile-picture.jpg`，可传路径覆盖）：
+
+```bash
+npm run icons                          # 用默认源图
+npm run icons "D:\pics\my-avatar.png"  # 或指定任意图片
+```
+
+生成到 `public/`：
+
+| 文件 | 用途 |
+| --- | --- |
+| `favicon.ico` | 浏览器标签页（内含 16 / 32 / 48 三档，PNG 压缩） |
+| `favicon-32.png` | 高清屏标签页 |
+| `apple-touch-icon.png` | iOS「添加到主屏幕」（180×180） |
+| `icon-192.png` / `icon-512.png` | Android / PWA 图标，`site.webmanifest` 里引用 |
+| `site.webmanifest` | 让「添加到主屏幕」后以独立应用方式打开（深色、无浏览器工具栏） |
+
+> 小尺寸（16–48px）用的是**面部特写裁剪 + 圆角**，不是整张原图——全身插画缩到 32px 会糊成一团，只有脸部还能认出。裁剪比例在 `scripts/generate-icons.mjs` 顶部的 `FACE_CROP`，换图后如果构图不同可以调。
 
 ---
 
@@ -202,7 +223,7 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 | 需求 / 能力 | 实现位置 |
 | --- | --- |
 | 启动读取 `localStorage` → 无 Key 弹 API Key Modal | `src/App.tsx`（hydrate → gate）、`src/components/ApiKeyModal.tsx` |
-| Key 存储键 `nexq_deepseek_api_key` | `src/lib/storage.ts` |
+| Key 存储键 `talkq_deepseek_api_key`（旧 `nexq_*` 自动迁移） | `src/lib/storage.ts` |
 | Show / Hide Key | `ApiKeyModal` 的 `Eye / EyeOff` 切换 |
 | `POST https://api.deepseek.com/chat/completions` | `src/lib/deepseek.ts`（唯一网络出口） |
 | 模型固定 `deepseek-flash`（DeepSeek-V4.1-Flash） | `src/lib/constants.ts` |
@@ -285,10 +306,12 @@ Browser ──fetch()──▶ https://api.deepseek.com
 
 | Key | 内容 |
 | --- | --- |
-| `nexq_deepseek_api_key` | 用户自己的 DeepSeek Key |
-| `nexq_settings` | 思考模式、系统提示词、Enter 发送、翻译方向与识别语言等偏好 |
-| `nexq_chat_history` | 对话会话与消息（含图片 data URL） |
-| `nexq_translate_transcript` | 实时翻译字幕记录（最近 200 句，可关闭保存） |
+| `talkq_deepseek_api_key` | 用户自己的 DeepSeek Key（旧的 `nexq_deepseek_api_key` 首次加载会自动迁移过来） |
+| `talkq_settings` | 思考模式、系统提示词、Enter 发送、翻译方向与识别语言等偏好 |
+| `talkq_chat_history` | 对话会话与消息（含图片 data URL） |
+| `talkq_translate_transcript` | 实时翻译字幕记录（最近 200 句，可关闭保存） |
+
+**从 NexQ 升级**：首次加载会把旧的 `nexq_*` 四个键复制成 `talkq_*`（旧键保留不删，方便回滚），所以你之前输入的 API Key 和聊天/字幕记录都不会丢。
 
 **音频不会被本应用保存或上传到任何服务器**：音量表只做本地实时分析，不录音；语音识别由浏览器内置能力处理（Chrome 会把音频交给 Google 的语音服务），发往 DeepSeek 的只有识别后的文字。
 
@@ -315,12 +338,14 @@ Browser ──fetch()──▶ https://api.deepseek.com
 | 11 | **实时翻译-字幕** | 对着麦克风说话 | 识别文字实时出现，随后逐句出现译文（双语字幕） |
 | 12 | **实时翻译-方向** | 先说中文，再说一句英文 | 中文出英文、英文出中文（自动互译），也可手动固定方向 |
 | 13 | **实时翻译-停止** | 点 **停止翻译** | 立即停止识别，地址栏麦克风图标消失 |
-| 14 | **实时翻译-导出** | 点 **复制全部** / **导出** | 剪贴板得到全文，或下载 `nexq-transcript-*.txt` |
+| 14 | **实时翻译-导出** | 点 **复制全部** / **导出** | 剪贴板得到全文，或下载 `talkq-transcript-*.txt` |
 | 15 | **问答栏-粘贴提问** | 右侧问答栏粘贴一段文字 → 回车 | 流式回答；开启「附带最近字幕」时答案会引用刚才的字幕 |
 | 16 | **问答栏-分享按钮** | 点某条字幕右侧的分享图标 | 该条字幕的**英文**自动填进问答框并**立即发送**，答案结合刚才的字幕 |
 
 | 17 | **手机-底部标签** | 用手机打开线上地址（或用 DevTools 手机模拟） | 自动切到移动布局：底部「字幕 / 问答」标签、无横向滚动 |
 | 18 | **手机-分享跳转** | 在手机上点某条字幕的分享按钮 | 自动跳到「问答」标签并立即发送该句英文 |
+| 19 | **品牌与图标** | 看标签页标题/图标、地址栏、以及「添加到主屏幕」 | 名称为 **TalkQ**，图标是源图生成的那套（标签页、主屏图标都正常） |
+| 20 | **从旧版本升级** | 若你之前用过 NexQ 版本（localStorage 里是 `nexq_*`） | 自动迁移到 `talkq_*`，不需要重新输入 API Key，历史记录仍在 |
 
 > 测试 3–8、10–18 需要你自己的真实 DeepSeek API Key，测试 10–18 还需要 Chrome/Edge + 可用的麦克风。
 > 仓库里不含 Key，我也没有替你写入任何 Key。
@@ -334,7 +359,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 ```bash
 npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
-npm run verify:e2e                    # 问答/对话：66 项断言
+npm run verify:e2e                    # 问答/对话 + 品牌/图标/键迁移：74 项断言
 npm run verify:translate              # 实时翻译 + 问答栏：51 项断言
 npm run verify:mobile                 # 手机布局（390×844 触屏视口）：37 项断言
 npm run verify:live-mobile            # 线上手机实测（可传 URL 覆盖）
@@ -356,7 +381,7 @@ Settings 无 Provider 选择器 / Thinking 开关真的写进请求体 / 刷新�
 拒绝麦克风权限时给出明确指引 → **问答栏确实嵌在翻译界面里、字幕按钮能预填问题、
 提问时请求体里带着最近字幕的上下文块、而可见对话历史里不掺入这段上下文**。
 
-也验证过：`dist-standalone/nexq-web.html` 用 `file://` 双击打开后可正常走完
+也验证过：`dist-standalone/talkq.html` 用 `file://` 双击打开后可正常走完
 「API Key Modal → Test & Continue → 流式回答 → 代码块复制」全流程（9/9 通过）。
 
 手机套件在 **390×844 触屏视口**（`isMobile` + `hasTouch`）里跑真实产物，覆盖：
@@ -375,7 +400,7 @@ src/
 ├── App.tsx                 # 启动流程 + 响应式外壳（≥1024px 桌面 / 以下手机布局）
 ├── main.tsx                # React 挂载 + ErrorBoundary
 ├── hooks/useIsMobile.ts    # 视口断点（matchMedia）
-├── index.css               # NexQ 设计令牌 / 动画 / 安全区 / 移动端字号
+├── index.css               # 设计令牌（沿用 NexQ） / 动画 / 安全区 / 移动端字号
 ├── components/
 │   ├── MobileApp.tsx       # 手机外壳：底部标签（字幕/问答）+ 紧凑控制栏 + ⋯ 菜单
 │   ├── MobileMenu.tsx      # 手机端次要操作菜单
@@ -394,7 +419,7 @@ src/
 │   ├── ImageStrip.tsx      # 图片预览条（可删可多张）
 │   ├── SettingsPanel.tsx   # 右侧设置抽屉（含实时翻译设置）
 │   ├── Lightbox.tsx        # 图片放大查看
-│   ├── Toaster.tsx         # NexQ 风格 Toast
+│   ├── Toaster.tsx         # 风格化 Toast
 │   └── ui/Button.tsx       # shadcn 风格按钮（cva + tailwind-merge）
 ├── lib/
 │   ├── constants.ts        # 唯一外部 API、模型名、存储键、图片/翻译限制
@@ -422,7 +447,7 @@ A: 官方 `api.deepseek.com` 允许浏览器跨域调用，本应用就是按此
 A: Flash 默认开启 thinking 模式，思考内容通过 `reasoning_content` 单独返回。可在 Settings 里关闭 **Thinking mode** 或关闭 **Show reasoning**。
 
 **Q: 历史记录会占空间吗？**
-A: 会，图片以 base64 存在 `nexq_chat_history` 里。写入超出配额时会自动降级（丢弃旧图片数据）并提示你删除旧会话。
+A: 会，图片以 base64 存在 `talkq_chat_history` 里。写入超出配额时会自动降级（丢弃旧图片数据）并提示你删除旧会话。
 
 ---
 

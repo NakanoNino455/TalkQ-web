@@ -130,12 +130,12 @@ await context.grantPermissions(["microphone"], { origin: LIVE_ORIGIN });
 await context.addInitScript(
   ([script]) => {
     if (!sessionStorage.getItem("nexq-live-mobile-seeded")) {
-      localStorage.setItem("nexq_deepseek_api_key", "sk-live-mobile-check");
+      localStorage.setItem("talkq_deepseek_api_key", "sk-live-mobile-check");
       localStorage.setItem(
-        "nexq_settings",
+        "talkq_settings",
         JSON.stringify({ livePreview: true, translateQuickMode: true })
       );
-      localStorage.removeItem("nexq_translate_transcript");
+      localStorage.removeItem("talkq_translate_transcript");
       sessionStorage.setItem("nexq-live-mobile-seeded", "1");
     }
     window.__NEXQ_CURSOR__ = window.__NEXQ_CURSOR__ ?? 0;

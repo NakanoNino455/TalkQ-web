@@ -18,6 +18,17 @@ export const MAX_OUTPUT_TOKENS_LABEL = "384K output";
 
 /** localStorage keys (browser-only storage, nothing is uploaded anywhere). */
 export const STORAGE_KEYS = {
+  apiKey: "talkq_deepseek_api_key",
+  settings: "talkq_settings",
+  chatHistory: "talkq_chat_history",
+  transcript: "talkq_translate_transcript",
+} as const;
+
+/**
+ * Keys used before the TalkQ rename. `migrateLegacyStorage()` copies them over
+ * once, so an existing key / chat history survives the rebrand.
+ */
+export const LEGACY_STORAGE_KEYS = {
   apiKey: "nexq_deepseek_api_key",
   settings: "nexq_settings",
   chatHistory: "nexq_chat_history",
@@ -109,5 +120,5 @@ export const PREVIEW_DEBOUNCE_MS = 900;
 /** Persisted transcript cap (keeps localStorage quota healthy). */
 export const MAX_STORED_SEGMENTS = 200;
 
-export const APP_NAME = "NexQ";
-export const APP_SUBTITLE = "NexQ Web";
+export const APP_NAME = "TalkQ";
+export const APP_SUBTITLE = "TalkQ Web";

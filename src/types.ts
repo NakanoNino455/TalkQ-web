@@ -1,4 +1,4 @@
-/** Domain types for the browser-only NexQ Web client. */
+/** Domain types for the browser-only TalkQ Web client. */
 
 export type Role = "system" | "user" | "assistant";
 

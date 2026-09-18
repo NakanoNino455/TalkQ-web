@@ -8,7 +8,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { showToast } from "@/stores/toastStore";
 
 /**
- * First-run gate. Shown whenever `nexq_deepseek_api_key` is missing from
+ * First-run gate. Shown whenever `talkq_deepseek_api_key` is missing from
  * localStorage; "Test & Continue" verifies the key against DeepSeek before the
  * chat UI is unlocked.
  */
@@ -71,7 +71,7 @@ export function ApiKeyModal({
         aria-labelledby="nexq-api-key-title"
         className="dash-modal relative w-full max-w-[26rem] overflow-hidden rounded-2xl border border-border bg-card/95 shadow-2xl backdrop-blur-xl"
       >
-        {/* Ambient top light, matching the NexQ modal treatment */}
+        {/* Ambient top light, matching the TalkQ modal treatment */}
         <div
           className="pointer-events-none absolute inset-x-0 -top-24 h-40 bg-[radial-gradient(28rem_10rem_at_50%_100%,hsl(var(--primary)/0.18),transparent_70%)]"
           aria-hidden
@@ -83,7 +83,7 @@ export function ApiKeyModal({
             id="nexq-api-key-title"
             className="mt-3 text-lg font-semibold tracking-tight text-foreground"
           >
-            NexQ
+            TalkQ
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
             {mode === "change" ? "Update your DeepSeek key" : "Connect your DeepSeek"}

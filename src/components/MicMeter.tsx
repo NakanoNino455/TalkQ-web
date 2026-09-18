@@ -3,7 +3,7 @@ import { Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Input level meter, NexQ style: a rolling bar history driven by the mic RMS,
+ * Input level meter, TalkQ style: a rolling bar history driven by the mic RMS,
  * so the user can see that the right device is actually picking up sound.
  */
 export function MicMeter({

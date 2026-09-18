@@ -13,7 +13,8 @@
     "verify:e2e": "node verification/verify-e2e.mjs",
     "verify:translate": "node verification/verify-translate.mjs",
     "verify:mobile": "node verification/verify-mobile.mjs",
-    "verify:live-mobile": "node verification/verify-live-mobile.mjs"
+    "verify:live-mobile": "node verification/verify-live-mobile.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

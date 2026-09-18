@@ -87,7 +87,7 @@ export function SettingsPanel({
         <header className="flex items-center gap-2 border-b border-border px-4 py-3.5">
           <h2 className="text-sm font-semibold text-foreground">Settings</h2>
           <span className="ml-auto text-meta uppercase tracking-[0.16em] text-muted-foreground">
-            NexQ Web
+            TalkQ Web
           </span>
           <button
             type="button"
@@ -426,7 +426,7 @@ export function SettingsPanel({
           {/* ── About ── */}
           <Section icon={<Info className="h-3.5 w-3.5" />} title="About">
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              NexQ Web is a static, browser-only DeepSeek client. There is no Tauri shell, no Rust,
+              TalkQ Web is a static, browser-only DeepSeek client. There is no Tauri shell, no Rust,
               no Node backend, no proxy and no telemetry: the bundle you loaded is the whole app.
             </p>
             <p className="mt-2 text-meta leading-relaxed text-muted-foreground">

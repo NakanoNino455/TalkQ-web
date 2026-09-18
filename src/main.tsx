@@ -16,4 +16,4 @@ ReactDOM.createRoot(container).render(
 );
 
 // Drop the static splash once React has taken over.
-document.getElementById("nexq-splash")?.remove();
+document.getElementById("talkq-splash")?.remove();

@@ -12,7 +12,7 @@ import { showToast } from "./toastStore";
 /**
  * Chat state: conversations, the composer draft, and the live streaming
  * lifecycle (including the AbortController behind "Stop generating").
- * Only `conversations` is persisted, to `nexq_chat_history`.
+ * Only `conversations` is persisted, to `talkq_chat_history`.
  */
 
 interface ChatState {

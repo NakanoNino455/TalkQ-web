@@ -23,7 +23,7 @@ const PROGRESS = {
   info: "bg-info/50",
 } as const;
 
-/** NexQ-style toast stack: spring entrance, accent rail, auto-dismiss bar. */
+/** TalkQ-style toast stack: spring entrance, accent rail, auto-dismiss bar. */
 export function Toaster({ className }: { className?: string } = {}) {
   const toasts = useToastStore((s) => s.toasts);
   return (

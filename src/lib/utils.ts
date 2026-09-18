@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/** shadcn-style class merger (same helper the NexQ front end uses). */
+/** shadcn-style class merger (same helper the TalkQ front end uses). */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

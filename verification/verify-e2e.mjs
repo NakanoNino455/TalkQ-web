@@ -1,5 +1,5 @@
 /**
- * NexQ Web end-to-end verification.
+ * TalkQ Web end-to-end verification.
  *
  * Runs the *real* production bundle from `dist/` in Chrome and points
  * https://api.deepseek.com at a local TLS mock (via Chromium host-resolver
@@ -12,7 +12,6 @@ import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
-
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.
@@ -30,19 +29,12 @@ try {
   );
   process.exit(2);
 }
-
 const PROJECT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(PROJECT, "dist");
 const BASE = "/nexq-web/";
 const APP_PORT = 4319;
 const MOCK_PORT = 8443;
 const ARTIFACTS = path.join(import.meta.dirname, "artifacts");
-
-if (!existsSync(path.join(DIST, "index.html"))) {
-  console.error("dist/ is missing — run `npm run build` first.");
-  process.exit(2);
-}
-mkdirSync(ARTIFACTS, { recursive: true });
 
 /* ── Test bookkeeping ────────────────────────────────────────────────── */
 const results = [];
@@ -123,7 +115,7 @@ const REASONING_STEPS = [
 ];
 
 const CONTENT_STEPS = [
-  "你好！我是 **NexQ Web** 里的 DeepSeek Flash。\n\n",
+  "你好！我是 **TalkQ Web** 里的 DeepSeek Flash。\n\n",
   "下面是一段示例代码：\n\n```ts\nconst greet = (name: string) => `你好, ${name}`;\n```\n\n",
   "- 支持 Markdown\n- 支持代码块复制\n- 支持 1M 上下文\n",
 ];
@@ -350,7 +342,7 @@ try {
   await page.goto(APP_URL, { waitUntil: "networkidle" });
   const dialog = page.getByRole("dialog");
   check("modal is visible", await dialog.isVisible());
-  check("brand shows NexQ", await page.getByText("NexQ", { exact: true }).first().isVisible());
+  check("brand shows TalkQ", await page.getByText("TalkQ", { exact: true }).first().isVisible());
   check("copy asks to connect DeepSeek", await page.getByText("Connect your DeepSeek").isVisible());
   check("Test & Continue button present", await page.getByRole("button", { name: "Test & Continue" }).isVisible());
   check(
@@ -358,7 +350,50 @@ try {
     await page.getByText("Stored locally in your browser").isVisible()
   );
   check("modal gates the chat UI", await composer().isDisabled());
+  check("tab title is TalkQ", (await page.title()).includes("TalkQ"));
   await shot("01-api-key-modal");
+
+  /* ── T1b: TalkQ branding + generated icon set ─────────────────────── */
+  group("T1b · TalkQ icon set is served and rendered");
+  const iconStatuses = await page.evaluate(async (base) => {
+    const names = [
+      "favicon.ico",
+      "favicon-32.png",
+      "apple-touch-icon.png",
+      "icon-192.png",
+      "icon-512.png",
+      "site.webmanifest",
+    ];
+    const out = {};
+    for (const name of names) {
+      try {
+        out[name] = (await fetch(base + name)).status;
+      } catch {
+        out[name] = "error";
+      }
+    }
+    return out;
+  }, BASE);
+  check(
+    "favicon / touch icons / manifest all 200",
+    Object.values(iconStatuses).every((status) => status === 200),
+    JSON.stringify(iconStatuses)
+  );
+  const logo = await page.evaluate(() => {
+    const img = [...document.images].find((i) => i.src.includes("icon-192.png"));
+    return img ? { found: true, width: img.naturalWidth, complete: img.complete } : { found: false };
+  });
+  check("in-app logo image loaded", logo.found && logo.complete && logo.width >= 180, JSON.stringify(logo));
+  const manifest = await page.evaluate(async (base) => {
+    const res = await fetch(`${base}site.webmanifest`);
+    const json = await res.json();
+    return { name: json.name ?? "", icons: (json.icons ?? []).length };
+  }, BASE);
+  check(
+    "manifest advertises TalkQ",
+    manifest.name.includes("TalkQ") && manifest.icons >= 2,
+    JSON.stringify(manifest)
+  );
 
   /* Show / hide key toggle */
   const keyInput = page.locator("#nexq-api-key");
@@ -376,8 +411,8 @@ try {
   await composer().waitFor({ timeout: 15000 });
   check("chat UI unlocked after successful test", !(await composer().isDisabled()));
   check("key modal closed", (await page.getByRole("dialog").count()) === 0);
-  const storedKey = await page.evaluate(() => localStorage.getItem("nexq_deepseek_api_key"));
-  check("key stored under nexq_deepseek_api_key", storedKey === "sk-mock-1234567890abcdef", String(storedKey));
+  const storedKey = await page.evaluate(() => localStorage.getItem("talkq_deepseek_api_key"));
+  check("key stored under talkq_deepseek_api_key", storedKey === "sk-mock-1234567890abcdef", String(storedKey));
   check(
     "test hit /chat/completions",
     state.requests.some((r) => r.url.includes("/chat/completions") && r.body?.stream === false)
@@ -399,7 +434,7 @@ try {
 
   // Progressive rendering: the answer must grow before the stream finishes.
   await page.waitForFunction(
-    () => document.querySelector(".nexq-prose")?.textContent?.includes("NexQ Web"),
+    () => document.querySelector(".nexq-prose")?.textContent?.includes("TalkQ Web"),
     undefined,
     { timeout: 10000 }
   );
@@ -545,7 +580,7 @@ try {
   check("a new request was issued", state.requests.length > requestsBeforeRegen);
   check(
     "regenerated content rendered",
-    (await page.locator(".nexq-prose").last().innerText()).includes("NexQ Web")
+    (await page.locator(".nexq-prose").last().innerText()).includes("TalkQ Web")
   );
   await shot("10-regenerate");
 
@@ -649,6 +684,40 @@ try {
     (e) => !/favicon|404|Failed to load resource|net::ERR/i.test(e)
   );
   check("no uncaught page errors", noisy.length === 0, noisy.slice(0, 2).join(" | "));
+
+  /* ── T17: pre-rename storage is migrated, not lost ────────────────── */
+  group("T17 · legacy nexq_* storage migrates to talkq_*");
+  const legacyContext = await browser.newContext({
+    ignoreHTTPSErrors: true,
+    viewport: { width: 1440, height: 900 },
+  });
+  await legacyContext.addInitScript(() => {
+    localStorage.clear();
+    // Only the pre-rename keys exist, as they would for an existing user.
+    localStorage.setItem("nexq_deepseek_api_key", "sk-legacy-migrated-123456");
+    localStorage.setItem("nexq_settings", JSON.stringify({ translateQuickMode: false }));
+  });
+  const legacyPage = await legacyContext.newPage();
+  await legacyPage.goto(APP_URL, { waitUntil: "networkidle" });
+  await legacyPage.locator("textarea").first().waitFor({ timeout: 12000 });
+  check(
+    "migrated key unlocks the app without the modal",
+    (await legacyPage.locator("#nexq-api-key").count()) === 0
+  );
+  const migrated = await legacyPage.evaluate(() => ({
+    key: localStorage.getItem("talkq_deepseek_api_key"),
+    settings: localStorage.getItem("talkq_settings") ?? "",
+    legacyKept: localStorage.getItem("nexq_deepseek_api_key") !== null,
+  }));
+  check(
+    "talkq_deepseek_api_key holds the old value",
+    migrated.key === "sk-legacy-migrated-123456",
+    String(migrated.key)
+  );
+  check("talkq_settings migrated as well", migrated.settings.includes("translateQuickMode"));
+  check("legacy entries are left in place (safe rollback)", migrated.legacyKept);
+  await legacyPage.screenshot({ path: path.join(ARTIFACTS, "14-migrated.png") });
+  await legacyContext.close();
 } catch (err) {
   check(`harness crashed: ${err.message}`, false);
   await shot("99-crash");

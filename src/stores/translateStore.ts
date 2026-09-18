@@ -267,7 +267,7 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
   exportTranscript: () => {
     const { segments, startedAt } = get();
     if (segments.length === 0) return "";
-    const header = `NexQ Web · 实时翻译记录 · ${new Date(startedAt ?? Date.now()).toLocaleString()}`;
+    const header = `TalkQ Web · 实时翻译记录 · ${new Date(startedAt ?? Date.now()).toLocaleString()}`;
     const body = segments
       .filter((s) => s.source.trim())
       .map((s) => `[${new Date(s.createdAt).toLocaleTimeString()}] ${s.source}\n→ ${s.translation || "(未翻译)"}`)

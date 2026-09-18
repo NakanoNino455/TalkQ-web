@@ -11,7 +11,6 @@ import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.
@@ -24,12 +23,11 @@ try {
 } catch {
   console.error(
     "This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned\n" +
-      "It drives the built dist/ bundle in a phone-sized Chrome with a fake microphone\n" +
-      "and a mock of https://api.deepseek.com, so no API key and no real phone are needed."
+      "It drives the built dist/ bundle in your installed Chrome against a local mock of\n" +
+      "https://api.deepseek.com, so no API key is required."
   );
   process.exit(2);
 }
-
 const PROJECT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(PROJECT, "dist");
 const BASE = "/nexq-web/";
@@ -172,9 +170,9 @@ const context = await browser.newContext({
 await context.grantPermissions(["microphone"], { origin: APP_URL });
 await context.addInitScript(
   ([script]) => {
-    localStorage.setItem("nexq_deepseek_api_key", "sk-mobile-e2e-1234567890");
-    localStorage.setItem("nexq_settings", JSON.stringify({ livePreview: true, translateQuickMode: true }));
-    localStorage.removeItem("nexq_translate_transcript");
+    localStorage.setItem("talkq_deepseek_api_key", "sk-mobile-e2e-1234567890");
+    localStorage.setItem("talkq_settings", JSON.stringify({ livePreview: true, translateQuickMode: true }));
+    localStorage.removeItem("talkq_translate_transcript");
 
     window.__NEXQ_CURSOR__ = 0;
     class FakeSpeechRecognition {

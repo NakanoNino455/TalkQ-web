@@ -18,7 +18,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[NexQ Web] render error", error, info.componentStack);
+    console.error("[TalkQ Web] render error", error, info.componentStack);
   }
 
   render() {
