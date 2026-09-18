@@ -3,11 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#080c16" />
     <meta
       name="description"
-      content="NexQ Web — a 100% browser-side DeepSeek client. DeepSeek Flash, 1M context, streaming chat and image understanding. Your API key never leaves your browser."
+      content="NexQ Web — 浏览器端实时语音翻译 + DeepSeek 客户端。DeepSeek Flash、1M 上下文、双语字幕。API Key 只存在你的浏览器里。"
     />
     <title>NexQ Web — DeepSeek Client</title>
     <style>
@@ -16,6 +23,15 @@
         margin: 0;
         background: hsl(222 47% 6%);
         color: hsl(210 20% 96%);
+        /* Mobile browsers resize the viewport as the URL bar / keyboard moves. */
+        height: 100%;
+        overscroll-behavior: none;
+      }
+      /* Avoid iOS zooming the page when an input receives focus. */
+      input,
+      textarea,
+      select {
+        font-size: 16px;
       }
       #nexq-splash {
         position: fixed;

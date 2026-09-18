@@ -10,6 +10,14 @@
 ![NexQ Web 对话界面](docs/screenshot.png)
 
 <details>
+<summary>手机端截图（底部标签：字幕 / 问答）</summary>
+
+<img src="docs/screenshot-mobile-subtitles.png" width="300" alt="手机端字幕页" />
+<img src="docs/screenshot-mobile-ask.png" width="300" alt="手机端问答页" />
+
+</details>
+
+<details>
 <summary>首次使用截图（API Key Modal）</summary>
 
 ![API Key Modal](docs/screenshot-api-key-modal.png)
@@ -151,7 +159,43 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 
 ---
 
-## 4. 功能对照
+## 4. 手机 / 平板适配
+
+同一份网页在手机上会自动切换成**移动端布局**（判定：视口宽度 < 1024px）：
+
+```
+┌───────────────────────┐
+│ 实时翻译 · 正在聆听  ⚙ │  ← 顶栏：状态 + 设置
+├───────────────────────┤
+│  [■ 停止翻译] 🎤  ⋯  │  ← 拇指区大按钮（≥44px）
+│  ● 正在聆听 00:02 1句 │
+│  [自动互译▾][中文▾]   │
+│  ▁▂▃▅▇▅▃▂  麦克风电平  │
+├───────────────────────┤
+│  字幕卡片（17px 大字） │  ← 整屏滚动，可读性优先
+│  你好… / Hello…       │
+├───────────────────────┤
+│   [字幕 1]   [问答]   │  ← 底部标签页，含安全区
+└───────────────────────┘
+```
+
+要点：
+
+* **底部标签页切「字幕 / 问答」**：手机屏幕放不下左右双栏，改成一次只显示一个整屏面板；有实时状态点与句数角标
+* **点字幕的分享按钮 → 自动跳到「问答」页并发送**（英文那半句），无缝衔接
+* **拇指友好**：主按钮 44px 高，字幕操作按钮 36×36，次要操作（复制全部 / 导出 / 清空 / 预览 / 低延迟）收进 `⋯` 菜单
+* **安全区适配**：`viewport-fit=cover` + `env(safe-area-inset-*)`，不会被刘海、灵动岛或底部手势条挡住
+* **`100dvh` 动态视口**：地址栏收起/弹出、软键盘弹出时输入框不会跑到屏幕外
+* **防 iOS 聚焦缩放**：输入框字号 ≥16px
+* **字幕字号加大**：手机上译文 17px（桌面 15px），一眼能看清
+* 侧栏变成抽屉（宽 82%、≤19rem），设置面板全宽
+
+> 手机上同样需要 **Chrome / Edge**（Web Speech API 限制），并且麦克风要求 https——GitHub Pages 本身就是 https，直接打开链接可用。
+> 建议「添加到主屏幕」当 App 用：已加 `theme-color` 与 `apple-mobile-web-app-*` 元信息，打开后是深色全屏、没有浏览器工具栏的观感。
+
+---
+
+## 5. 功能对照
 
 | 需求 / 能力 | 实现位置 |
 | --- | --- |
@@ -180,7 +224,7 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 
 ---
 
-## 5. 部署到 GitHub Pages
+## 6. 部署到 GitHub Pages
 
 ### 方式 A：GitHub Actions（推荐，已内置）
 
@@ -209,7 +253,7 @@ npm run build
 
 ---
 
-## 6. DeepSeek API 约定
+## 7. DeepSeek API 约定
 
 ```http
 POST https://api.deepseek.com/chat/completions
@@ -233,7 +277,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 
 ---
 
-## 7. 数据与隐私
+## 8. 数据与隐私
 
 只使用 `localStorage`：
 
@@ -252,7 +296,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 
 ---
 
-## 8. 验收自测
+## 9. 验收自测
 
 | # | 测试 | 怎么做 | 期望 |
 | --- | --- | --- | --- |
@@ -273,7 +317,10 @@ Browser ──fetch()──▶ https://api.deepseek.com
 | 15 | **问答栏-粘贴提问** | 右侧问答栏粘贴一段文字 → 回车 | 流式回答；开启「附带最近字幕」时答案会引用刚才的字幕 |
 | 16 | **问答栏-分享按钮** | 点某条字幕右侧的分享图标 | 该条字幕的**英文**自动填进问答框并**立即发送**，答案结合刚才的字幕 |
 
-> 测试 3–8、10–14 需要你自己的真实 DeepSeek API Key，测试 10–14 还需要 Chrome/Edge + 可用的麦克风。
+| 17 | **手机-底部标签** | 用手机打开线上地址（或用 DevTools 手机模拟） | 自动切到移动布局：底部「字幕 / 问答」标签、无横向滚动 |
+| 18 | **手机-分享跳转** | 在手机上点某条字幕的分享按钮 | 自动跳到「问答」标签并立即发送该句英文 |
+
+> 测试 3–8、10–18 需要你自己的真实 DeepSeek API Key，测试 10–18 还需要 Chrome/Edge + 可用的麦克风。
 > 仓库里不含 Key，我也没有替你写入任何 Key。
 
 ### 自动化端到端验证（可选，不需要真实 Key）
@@ -286,7 +333,8 @@ Browser ──fetch()──▶ https://api.deepseek.com
 npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
 npm run verify:e2e                    # 问答/对话：66 项断言
-npm run verify:translate              # 实时翻译 + 问答栏：45 项断言
+npm run verify:translate              # 实时翻译 + 问答栏：51 项断言
+npm run verify:mobile                 # 手机布局（390×844 触屏视口）：31 项断言
 ```
 
 截图会落到 `verification/artifacts/`。
@@ -307,16 +355,25 @@ Settings 无 Provider 选择器 / Thinking 开关真的写进请求体 / 刷新�
 也验证过：`dist-standalone/nexq-web.html` 用 `file://` 双击打开后可正常走完
 「API Key Modal → Test & Continue → 流式回答 → 代码块复制」全流程（9/9 通过）。
 
+手机套件在 **390×844 触屏视口**（`isMobile` + `hasTouch`）里跑真实产物，覆盖：
+无横向溢出 → 不渲染桌面侧栏 → 底部两个标签都在视口内 → 主按钮 ≥44px →
+开始翻译后字幕 17px 字号 → 字幕操作按钮 ≥32px 且语言标签不换行 → `⋯` 菜单含复制/导出/清空 →
+点分享自动切到「问答」标签、只发送英文、带上字幕上下文 → 输入框整体在视口内（不被标签栏遮挡）→
+输入并发送 → 切回「字幕」会话仍在 → 停止释放麦克风 → 侧栏抽屉宽度 ≤90% 屏宽 → 设置面板无横向溢出。
+
 ---
 
-## 9. 目录结构
+## 10. 目录结构
 
 ```
 src/
-├── App.tsx                 # 启动流程：hydrate → 有 Key 进界面 / 无 Key 弹 Modal；对话 ⇄ 实时翻译
+├── App.tsx                 # 启动流程 + 响应式外壳（≥1024px 桌面 / 以下手机布局）
 ├── main.tsx                # React 挂载 + ErrorBoundary
-├── index.css               # NexQ 设计令牌 / 动画 / markdown prose
+├── hooks/useIsMobile.ts    # 视口断点（matchMedia）
+├── index.css               # NexQ 设计令牌 / 动画 / 安全区 / 移动端字号
 ├── components/
+│   ├── MobileApp.tsx       # 手机外壳：底部标签（字幕/问答）+ 紧凑控制栏 + ⋯ 菜单
+│   ├── MobileMenu.tsx      # 手机端次要操作菜单
 │   ├── ApiKeyModal.tsx     # 首次使用的 Key 弹窗（Test & Continue）
 │   ├── Sidebar.tsx         # 左侧栏：模式切换 / New Chat / 会话列表 / Key 状态
 │   ├── TopBar.tsx          # 实时翻译状态 · DeepSeek Flash · 麦克风状态 · 问答栏开关
@@ -351,7 +408,7 @@ src/
 
 ---
 
-## 10. 常见问题
+## 11. 常见问题
 
 **Q: 浏览器直连 DeepSeek 会不会有 CORS 问题？**
 A: 官方 `api.deepseek.com` 允许浏览器跨域调用，本应用就是按此设计（无需代理）。若你的网络环境或扩展拦截了请求，会看到 `Network Error` 文案，请检查网络、代理或广告拦截插件。
@@ -364,6 +421,6 @@ A: 会，图片以 base64 存在 `nexq_chat_history` 里。写入超出配额时
 
 ---
 
-## 11. 许可
+## 12. 许可
 
 前端视觉与交互沿用 [naxhq/NexQ](https://github.com/naxhq/NexQ) 的设计语言；本仓库为纯 Web 重写版本，遵循上游 MIT 许可。

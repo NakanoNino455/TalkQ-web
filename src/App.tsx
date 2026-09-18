@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { AskPanel } from "@/components/AskPanel";
 import { Lightbox } from "@/components/Lightbox";
+import { MobileApp, type MobileTab } from "@/components/MobileApp";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { Toaster } from "@/components/Toaster";
 import { TopBar } from "@/components/TopBar";
 import { TranslateView } from "@/components/TranslateView";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -32,8 +34,10 @@ export default function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("subtitle");
   const [keyPrompt, setKeyPrompt] = useState<"first-run" | "change" | null>(null);
 
+  const isMobile = useIsMobile();
   const hydrated = settingsHydrated && chatsHydrated && transcriptHydrated;
   const askOpen = settings.askPanelOpen;
 
@@ -53,6 +57,14 @@ export default function App() {
     setKeyPrompt((current) => (current === "change" ? "change" : null));
   }, [hydrated, apiKey]);
 
+  // Mobile: the subtitle share button switches to the Q&A tab.
+  useEffect(() => {
+    if (!isMobile) return;
+    const openAsk = () => setMobileTab("ask");
+    window.addEventListener("nexq:open-ask", openAsk);
+    return () => window.removeEventListener("nexq:open-ask", openAsk);
+  }, [isMobile]);
+
   // Shortcuts: ask panel, new question, settings.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -64,7 +76,8 @@ export default function App() {
       }
       if (mod && event.shiftKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        updateSettings({ askPanelOpen: !useSettingsStore.getState().settings.askPanelOpen });
+        if (isMobile) setMobileTab((tab) => (tab === "ask" ? "subtitle" : "ask"));
+        else updateSettings({ askPanelOpen: !useSettingsStore.getState().settings.askPanelOpen });
       }
       if (mod && event.key === ",") {
         event.preventDefault();
@@ -73,7 +86,62 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newChat, updateSettings]);
+  }, [newChat, updateSettings, isMobile]);
+
+  /* ── Phone layout: one pane + bottom tabs ─────────────────────────── */
+  if (isMobile) {
+    return (
+      <div className="app-ambient relative flex h-full w-full flex-col overflow-hidden bg-background">
+        <TopBar
+          compact
+          askOpen={mobileTab === "ask"}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          onToggleAsk={() => setMobileTab((tab) => (tab === "ask" ? "subtitle" : "ask"))}
+        />
+
+        <MobileApp tab={mobileTab} onTabChange={setMobileTab} />
+
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-40 flex">
+            <div
+              className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden
+            />
+            <Sidebar
+              className="pt-safe relative w-[82%] max-w-[19rem]"
+              onOpenSettings={() => {
+                setSidebarOpen(false);
+                setSettingsOpen(true);
+              }}
+              onClose={() => setSidebarOpen(false)}
+            />
+          </div>
+        )}
+
+        <SettingsPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onChangeKey={() => {
+            setSettingsOpen(false);
+            setKeyPrompt("change");
+          }}
+        />
+
+        {keyPrompt && (
+          <ApiKeyModal
+            mode={keyPrompt}
+            onDone={() => setKeyPrompt(null)}
+            onCancel={() => setKeyPrompt(null)}
+          />
+        )}
+
+        <Lightbox />
+        <Toaster className="bottom-safe" />
+      </div>
+    );
+  }
 
   return (
     <div className="app-ambient relative flex h-full w-full overflow-hidden bg-background">

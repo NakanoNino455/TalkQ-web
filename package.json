@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "verify:e2e": "node verification/verify-e2e.mjs",
-    "verify:translate": "node verification/verify-translate.mjs"
+    "verify:translate": "node verification/verify-translate.mjs",
+    "verify:mobile": "node verification/verify-mobile.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

@@ -87,12 +87,18 @@
   #root {
     height: 100%;
   }
+  /* Dynamic viewport height: keeps the composer visible while the mobile URL
+     bar / on-screen keyboard animate. */
+  #root {
+    height: 100dvh;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1, "liga" 1;
     font-variant-numeric: tabular-nums;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
   }
   code,
   pre,
@@ -100,6 +106,44 @@
   .font-mono {
     font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", "SF Mono",
       ui-monospace, monospace;
+  }
+}
+
+/* ── Mobile: safe areas (notch / home indicator / gesture bar) ───────── */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .bottom-safe {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* Touch-friendly hit areas (a thumb needs ~44px). */
+  .touch-target {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+  /* Bigger, glanceable subtitles on phones. */
+  .subtitle-source {
+    font-size: 0.8125rem; /* 13px */
+    line-height: 1.5;
+  }
+  .subtitle-target {
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.55;
+  }
+  @media (min-width: 1024px) {
+    .subtitle-source {
+      font-size: 0.78125rem; /* 12.5px */
+    }
+    .subtitle-target {
+      font-size: 0.9375rem; /* 15px */
+    }
   }
 }
 

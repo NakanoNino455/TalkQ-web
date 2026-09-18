@@ -28,8 +28,8 @@ export function MicMeter({
     for (let i = 0; i < children.length; i += 1) {
       const bar = children[i] as HTMLElement;
       const value = historyRef.current[i] ?? 0;
-      bar.style.transform = `scaleY(${Math.max(0.06, Math.min(1, value * 1.6))})`;
-      bar.style.opacity = String(0.25 + Math.min(1, value * 2) * 0.75);
+      bar.style.transform = `scaleY(${Math.max(0.14, Math.min(1, value * 1.6))})`;
+      bar.style.opacity = String(0.3 + Math.min(1, value * 2) * 0.7);
     }
   }, [level, active]);
 
@@ -50,7 +50,7 @@ export function MicMeter({
           <span
             key={i}
             className="h-full flex-1 origin-center rounded-full bg-gradient-to-t from-primary/40 via-primary/70 to-primary transition-transform duration-100"
-            style={{ transform: "scaleY(0.06)" }}
+            style={{ transform: "scaleY(0.14)" }}
           />
         ))}
       </div>

@@ -24,10 +24,15 @@ const PROGRESS = {
 } as const;
 
 /** NexQ-style toast stack: spring entrance, accent rail, auto-dismiss bar. */
-export function Toaster() {
+export function Toaster({ className }: { className?: string } = {}) {
   const toasts = useToastStore((s) => s.toasts);
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <div
+      className={cn(
+        "pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2",
+        className
+      )}
+    >
       {toasts.map((toast) => (
         <ToastRow key={toast.id} toast={toast} />
       ))}

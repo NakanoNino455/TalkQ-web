@@ -18,9 +18,12 @@ import { useTranslateStore } from "@/stores/translateStore";
  */
 export function AskPanel({
   onClose,
+  embedded,
   className,
 }: {
   onClose: () => void;
+  /** Mobile tab mode: the bottom tab bar owns the navigation chrome. */
+  embedded?: boolean;
   className?: string;
 }) {
   const settings = useSettingsStore((s) => s.settings);
@@ -54,12 +57,18 @@ export function AskPanel({
   return (
     <aside
       className={cn(
-        "flex h-full w-full flex-col border-l border-border bg-card/40 backdrop-blur-xl",
+        "flex h-full w-full flex-col bg-card/40 backdrop-blur-xl",
+        embedded ? "border-0" : "border-l border-border",
         className
       )}
       aria-label="问答"
     >
-      <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+      <header
+        className={cn(
+          "flex items-center gap-2 border-b border-border px-3",
+          embedded ? "py-2.5" : "py-2.5"
+        )}
+      >
         <HelpCircle className="h-3.5 w-3.5 text-primary" />
         <h2 className="text-[13px] font-medium text-foreground">问答</h2>
         {messageCount > 0 && (
@@ -76,19 +85,24 @@ export function AskPanel({
             onClick={() => {
               if (window.confirm("清空问答记录？字幕不受影响。")) clearAllChats();
             }}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:opacity-40"
+            className={cn(
+              "rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:opacity-40",
+              embedded && "touch-target grid place-items-center p-0"
+            )}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
-          <button
-            type="button"
-            title="收起问答栏"
-            aria-label="收起问答栏"
-            onClick={onClose}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <PanelRightClose className="h-3.5 w-3.5" />
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              title="收起问答栏"
+              aria-label="收起问答栏"
+              onClick={onClose}
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <PanelRightClose className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </header>
 

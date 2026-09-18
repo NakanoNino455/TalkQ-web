@@ -48,48 +48,60 @@ export function SegmentCard({
           : "border-border bg-card/55 hover:border-border/80"
       )}
     >
-      <div className="mb-1.5 flex items-center gap-2 text-meta text-muted-foreground">
-        <span className="grid h-4 min-w-4 place-items-center rounded bg-muted/60 px-1 font-mono text-[10px]">
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted-foreground">
+        <span className="grid h-4 min-w-4 shrink-0 place-items-center rounded bg-muted/60 px-1 font-mono text-[10px]">
           {index + 1}
         </span>
-        <span>{time}</span>
-        <span className="rounded border border-border bg-muted/40 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide">
-          {LANG_LABELS[segment.sourceLang] ?? segment.sourceLang} → {LANG_LABELS[segment.targetLang] ?? segment.targetLang}
+        <span className="shrink-0">{time}</span>
+        <span className="shrink-0 whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide">
+          {LANG_LABELS[segment.sourceLang] ?? segment.sourceLang} →{" "}
+          {LANG_LABELS[segment.targetLang] ?? segment.targetLang}
         </span>
         {streaming && (
-          <span className="inline-flex items-center gap-1 text-primary">
+          <span className="inline-flex shrink-0 items-center gap-1 text-primary">
             <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
             翻译中
           </span>
         )}
         {segment.durationMs != null && !streaming && (
-          <span className="text-muted-foreground/60">{formatDuration(segment.durationMs)}</span>
+          <span className="hidden shrink-0 text-muted-foreground/60 sm:inline">
+            {formatDuration(segment.durationMs)}
+          </span>
         )}
 
-        <span className="ml-auto flex items-center gap-0.5 opacity-60 transition-opacity group-hover/seg:opacity-100">
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity lg:opacity-60 lg:group-hover/seg:opacity-100">
           {onShare && (
             <IconAction
               label="分享到问答（自动发送英文）"
               onClick={() => onShare(segment)}
-              icon={<Share2 className="h-3 w-3" />}
+              icon={<Share2 className="h-3.5 w-3.5 lg:h-3 lg:w-3" />}
             />
           )}
           <IconAction
             label={copied === "english" ? "已复制" : english.label}
             onClick={() => copy("english")}
-            icon={copied === "english" ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+            icon={copied === "english" ? <Check className="h-3.5 w-3.5 text-success lg:h-3 lg:w-3" /> : <Copy className="h-3.5 w-3.5 lg:h-3 lg:w-3" />}
           />
           <IconAction
             label={copied === "translation" ? "已复制" : "复制译文"}
             onClick={() => copy("translation")}
-            icon={copied === "translation" ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+            icon={copied === "translation" ? <Check className="h-3.5 w-3.5 text-success lg:h-3 lg:w-3" /> : <Copy className="h-3.5 w-3.5 lg:h-3 lg:w-3" />}
           />
-          <IconAction label="重新翻译" onClick={() => onRetranslate(segment.id)} icon={<RefreshCw className="h-3 w-3" />} />
-          <IconAction label="删除" onClick={() => onDelete(segment.id)} icon={<Trash2 className="h-3 w-3" />} danger />
+          <IconAction
+            label="重新翻译"
+            onClick={() => onRetranslate(segment.id)}
+            icon={<RefreshCw className="h-3.5 w-3.5 lg:h-3 lg:w-3" />}
+          />
+          <IconAction
+            label="删除"
+            onClick={() => onDelete(segment.id)}
+            icon={<Trash2 className="h-3.5 w-3.5 lg:h-3 lg:w-3" />}
+            danger
+          />
         </span>
       </div>
 
-      <p className="text-[12.5px] leading-relaxed text-muted-foreground">{segment.source}</p>
+      <p className="subtitle-source text-muted-foreground">{segment.source}</p>
 
       {segment.status === "error" && segment.error ? (
         <p className="mt-1.5 flex items-start gap-1.5 text-[12px] text-destructive">
@@ -97,7 +109,7 @@ export function SegmentCard({
           {segment.error}
         </p>
       ) : (
-        <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+        <p className="subtitle-target mt-1.5 whitespace-pre-wrap text-foreground">
           {segment.translation}
           {streaming && <span className="stream-caret" aria-hidden />}
         </p>
@@ -124,7 +136,9 @@ function IconAction({
       title={label}
       aria-label={label}
       className={cn(
-        "rounded p-1 transition-colors",
+        "rounded p-1 transition-colors lg:p-1",
+        // Comfortable thumb targets on phones, compact on desktop.
+        "max-lg:grid max-lg:h-9 max-lg:w-9 max-lg:place-items-center",
         danger
           ? "text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
