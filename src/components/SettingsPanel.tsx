@@ -13,6 +13,7 @@ import {
   Loader2,
   Mic,
   PlugZap,
+  Share2,
   Sparkles,
   Trash2,
   X,
@@ -345,8 +346,9 @@ export function SettingsPanel({
               onChange={(v) => updateSettings({ askUseTranscriptContext: v })}
             />
             <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
-              字幕按钮里还有一个 <HelpCircle className="inline h-3 w-3 align-text-bottom" /> 图标：
-              点一下就把那句话送进问答框，接着写你的问题即可。
+              字幕右侧的 <Share2 className="inline h-3 w-3 align-text-bottom" /> 分享按钮会把该句的
+              <strong className="text-foreground/80">英文</strong>填进问答框并立即发送；
+              旁边两个复制按钮分别是「复制英文」和「复制译文」。
             </p>
           </Section>
 

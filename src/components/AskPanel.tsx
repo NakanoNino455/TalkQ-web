@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ClipboardList, HelpCircle, PanelRightClose, Trash2 } from "lucide-react";
 import { ChatView } from "./ChatView";
 import { Composer } from "./Composer";
+import { askDeepSeek } from "@/lib/ask";
 import { buildTranscriptContext } from "@/lib/translate";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
@@ -29,7 +30,6 @@ export function AskPanel({
   const activeId = useChatStore((s) => s.activeId);
   const clearAllChats = useChatStore((s) => s.clearAllChats);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const send = useChatStore((s) => s.send);
 
   const doneSegments = useMemo(
     () => segments.filter((s) => s.source.trim()),
@@ -44,14 +44,11 @@ export function AskPanel({
   const messageCount = active?.messages.length ?? 0;
 
   /**
-   * Paste-and-ask with the newest subtitles attached. Called by the composer
-   * through the shared chat store so the visible history stays clean.
+   * Paste-and-ask with the newest subtitles attached (shared with the subtitle
+   * share button, so both paths behave identically).
    */
   const handleSend = () => {
-    const context = settings.askUseTranscriptContext
-      ? buildTranscriptContext(useTranslateStore.getState().segments)
-      : undefined;
-    void send(undefined, { contextText: context });
+    void askDeepSeek();
   };
 
   return (

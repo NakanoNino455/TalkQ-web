@@ -142,6 +142,26 @@ export function cleanTranslation(raw: string): string {
 }
 
 /**
+ * The English half of one subtitle pair — that is what the share button sends
+ * into the Q&A panel. Falls back to the original when the pair has no English
+ * (e.g. 日本語 → 中文), and then the label says so.
+ */
+export function englishSideOf(segment: {
+  source: string;
+  translation: string;
+  sourceLang: LangCode;
+  targetLang: LangCode;
+}): { text: string; label: string } {
+  if (segment.sourceLang === "en" && segment.source.trim()) {
+    return { text: segment.source, label: "复制英文" };
+  }
+  if (segment.targetLang === "en" && segment.translation.trim()) {
+    return { text: segment.translation, label: "复制英文" };
+  }
+  return { text: segment.source, label: "复制原文" };
+}
+
+/**
  * Render the most recent subtitles as a context block for the embedded Q&A
  * panel, so a pasted question can be answered against what was just said.
  */

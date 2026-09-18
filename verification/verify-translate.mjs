@@ -500,22 +500,61 @@ try {
   );
   check("no mode switch left in the sidebar", (await page.getByText("对话", { exact: true }).count()) === 0);
 
-  // The per-subtitle ask button prefills the panel input.
-  await page.locator('button[aria-label="就这句提问"]').first().click();
-  await page.waitForTimeout(300);
-  const input = panel.locator("textarea").first();
-  const prefilled = await input.inputValue();
+  // T10 stopped the session; start it again so the remaining utterances arrive.
+  await page.getByRole("button", { name: /开始实时翻译/ }).first().click();
+  await page
+    .waitForFunction(
+      () => document.querySelectorAll('[class*="group/seg"]').length >= 3,
+      undefined,
+      { timeout: 25000 }
+    )
+    .catch(() => {});
+  await page.getByText("English sentence for auto detection.").first().waitFor({ timeout: 25000 });
+
+  // Copy buttons are named by content: English first, then the translation.
+  const copyLabels = await page
+    .locator('button[aria-label^="复制"]')
+    .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("aria-label")));
+  const englishCount = copyLabels.filter((l) => l === "复制英文").length;
+  const translationCount = copyLabels.filter((l) => l === "复制译文").length;
   check(
-    "subtitle ask button prefills the question box",
-    prefilled.includes("关于这句字幕") && prefilled.includes("你好，这是一次实时翻译测试。"),
-    prefilled.replace(/\s+/g, " ").slice(0, 40)
+    "first copy button is 复制英文 (per segment)",
+    englishCount >= 2,
+    `${englishCount}× 复制英文 of ${copyLabels.length} copy buttons`
+  );
+  check("second copy button is 复制译文 (per segment)", translationCount >= 2);
+  const ordered = copyLabels.every(
+    (label, i) => label !== "复制译文" || ["复制英文", "复制原文"].includes(copyLabels[i - 1])
+  );
+  check("within a subtitle: English button comes before 复制译文", ordered, JSON.stringify(copyLabels));
+  check(
+    "no copy button still says 复制原文 for English subtitles",
+    copyLabels.slice(-2).join(",") === "复制英文,复制译文",
+    JSON.stringify(copyLabels.slice(-2))
   );
 
-  const askRequestsBefore = state.requests.filter((r) => r.isAsk).length;
-  await page.keyboard.press("Enter");
-  await page.getByText("这是针对", { exact: false }).first().waitFor({ timeout: 15000 }).catch(() => {});
+  const shareButtons = page.locator('button[aria-label="分享到问答（自动发送英文）"]');
+  check(
+    "share button replaced the question mark",
+    (await shareButtons.count()) === 3 &&
+      (await page.locator('button[aria-label="就这句提问"]').count()) === 0
+  );
+
+  // Share → the English half lands in the Q&A box and is sent immediately.
+  const asksBefore = state.requests.filter((r) => r.isAsk).length;
+  await shareButtons.nth(2).click();
+  await page.getByText("这是针对", { exact: false }).first().waitFor({ timeout: 20000 }).catch(() => {});
   const askRequests = state.requests.filter((r) => r.isAsk);
-  check("asking sent a chat request", askRequests.length > askRequestsBefore, `${askRequests.length} ask requests`);
+  check("share auto-sent a question", askRequests.length === asksBefore + 1, `${asksBefore} → ${askRequests.length}`);
+  check(
+    "share sent ONLY the English text",
+    askRequests.at(-1)?.text === "English sentence for auto detection.",
+    JSON.stringify(askRequests.at(-1)?.text ?? null)
+  );
+  check(
+    "shared message appears in the Q&A thread",
+    await panel.getByText("English sentence for auto detection.", { exact: true }).first().isVisible()
+  );
   const withTranscript = askRequests.find((r) =>
     r.systems?.some(
       (s) => s.includes("【实时翻译字幕上下文】") && /\n\d+\. \S/.test(s) // numbered subtitle lines

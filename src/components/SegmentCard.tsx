@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Copy, HelpCircle, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, RefreshCw, Share2, Trash2 } from "lucide-react";
 import type { TranslateSegment } from "@/types";
 import { LANG_LABELS } from "@/lib/constants";
+import { englishSideOf } from "@/lib/translate";
 import { cn, copyText, formatDuration } from "@/lib/utils";
 
 /** One subtitle row: recognized original on top, streaming translation below. */
@@ -10,20 +11,21 @@ export function SegmentCard({
   index,
   onRetranslate,
   onDelete,
-  onAsk,
+  onShare,
 }: {
   segment: TranslateSegment;
   index: number;
   onRetranslate: (id: string) => void;
   onDelete: (id: string) => void;
-  /** Push this subtitle into the embedded Q&A panel. */
-  onAsk?: (segment: TranslateSegment) => void;
+  /** Send the English half of this subtitle into the Q&A panel (auto-sends). */
+  onShare?: (segment: TranslateSegment) => void;
 }) {
-  const [copied, setCopied] = useState<"translation" | "source" | null>(null);
+  const [copied, setCopied] = useState<"english" | "translation" | null>(null);
   const streaming = segment.status === "streaming";
+  const english = englishSideOf(segment);
 
-  const copy = async (kind: "translation" | "source") => {
-    const text = kind === "translation" ? segment.translation : segment.source;
+  const copy = async (kind: "english" | "translation") => {
+    const text = kind === "english" ? english.text : segment.translation;
     if (!text.trim()) return;
     if (await copyText(text)) {
       setCopied(kind);
@@ -65,22 +67,22 @@ export function SegmentCard({
         )}
 
         <span className="ml-auto flex items-center gap-0.5 opacity-60 transition-opacity group-hover/seg:opacity-100">
-          {onAsk && (
+          {onShare && (
             <IconAction
-              label="就这句提问"
-              onClick={() => onAsk(segment)}
-              icon={<HelpCircle className="h-3 w-3" />}
+              label="分享到问答（自动发送英文）"
+              onClick={() => onShare(segment)}
+              icon={<Share2 className="h-3 w-3" />}
             />
           )}
+          <IconAction
+            label={copied === "english" ? "已复制" : english.label}
+            onClick={() => copy("english")}
+            icon={copied === "english" ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+          />
           <IconAction
             label={copied === "translation" ? "已复制" : "复制译文"}
             onClick={() => copy("translation")}
             icon={copied === "translation" ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
-          />
-          <IconAction
-            label={copied === "source" ? "已复制" : "复制原文"}
-            onClick={() => copy("source")}
-            icon={copied === "source" ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
           />
           <IconAction label="重新翻译" onClick={() => onRetranslate(segment.id)} icon={<RefreshCw className="h-3 w-3" />} />
           <IconAction label="删除" onClick={() => onDelete(segment.id)} icon={<Trash2 className="h-3 w-3" />} danger />

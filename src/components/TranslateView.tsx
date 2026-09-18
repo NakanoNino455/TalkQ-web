@@ -24,6 +24,8 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { describeEnvironmentProblem, isSpeechRecognitionSupported } from "@/lib/speech";
+import { englishSideOf } from "@/lib/translate";
+import { askDeepSeek } from "@/lib/ask";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTranslateStore } from "@/stores/translateStore";
@@ -82,18 +84,19 @@ export function TranslateView() {
     }));
   };
 
-  /** Send one subtitle into the embedded Q&A panel and focus the input. */
-  const handleAsk = (segment: { source: string; translation: string }) => {
-    const quoted = segment.translation.trim()
-      ? `关于这句字幕：\n原文：${segment.source}\n译文：${segment.translation}\n\n我的问题：`
-      : `关于这句字幕：\n${segment.source}\n\n我的问题：`;
-    setDraft(quoted);
+  /**
+   * Share button on a subtitle: put the English half into the Q&A box and send
+   * it right away (the box shows what was sent until the message appears above).
+   */
+  const handleShare = (segment: { source: string; translation: string; sourceLang: string; targetLang: string }) => {
+    const english = englishSideOf(segment as never).text.trim();
+    if (!english) return;
+
+    setDraft(english);
     updateSettings({ askPanelOpen: true });
+
     requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLTextAreaElement>('aside[aria-label="问答"] textarea');
-      if (!input) return;
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
+      void askDeepSeek(english);
     });
   };
 
@@ -348,7 +351,7 @@ export function TranslateView() {
                   index={index}
                   onRetranslate={(id) => void retranslate(id)}
                   onDelete={handleDelete}
-                  onAsk={handleAsk}
+                  onShare={handleShare}
                 />
               ))
             )}
