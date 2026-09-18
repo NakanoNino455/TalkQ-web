@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="NexQ Web — a 100% browser-side DeepSeek client. DeepSeek Flash, 1M context, streaming chat and image understanding. Your API key never leaves your browser."
+    />
+    <title>NexQ Web — DeepSeek Client</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: hsl(222 47% 6%);
+        color: hsl(210 20% 96%);
+      }
+      #nexq-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0.28em;
+        font-size: 12px;
+        text-transform: uppercase;
+        color: hsl(215 14% 64%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="nexq-splash">NexQ</div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

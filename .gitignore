@@ -1,0 +1,23 @@
+# ---- NexQ Web (browser-only build) ----
+node_modules
+dist
+dist-standalone
+dist-ssr
+*.local
+
+# Env files are never used to store a user API key, but keep them out of git.
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Playwright / verification scratch space
+verification/artifacts

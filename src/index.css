@@ -1,0 +1,517 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Type scale (ported from the NexQ desktop front end): 4-step hierarchy ──
+   text-meta  = 10px  (labels, badges, timestamps, metadata)
+   text-xs    = 12px  (body text, descriptions, inputs)
+   text-sm    = 14px  (emphasis, nav items, toasts)
+   text-base+ = 16px+ (headings)
+*/
+@layer utilities {
+  .text-meta {
+    font-size: 0.625rem; /* 10px */
+    line-height: 1rem; /* 16px */
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 210 20% 98%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 20% 43%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+    --radius: 0.625rem;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --highlight: 48 96% 53%;
+    --highlight-foreground: 0 0% 9%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 20% 96%;
+    --card: 222 40% 8%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 40% 8%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 26% 14%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 220 20% 16%;
+    --muted-foreground: 215 14% 64%;
+    --accent: 220 26% 14%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 18%;
+    --input: 220 20% 18%;
+    --ring: 217 91% 60%;
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 9%;
+    --info: 199 89% 53%;
+    --info-foreground: 0 0% 100%;
+    --highlight: 48 96% 60%;
+    --highlight-foreground: 0 0% 9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "liga" 1;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+  }
+  code,
+  pre,
+  kbd,
+  .font-mono {
+    font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", "SF Mono",
+      ui-monospace, monospace;
+  }
+}
+
+/* Custom scrollbar (NexQ signature 5px rail) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* Subtle glow on primary elements */
+.glow-primary {
+  box-shadow: 0 0 12px -4px hsl(var(--primary) / 0.1), 0 0 4px -2px hsl(var(--primary) / 0.06);
+}
+
+.glow-primary-strong {
+  box-shadow: 0 6px 22px -8px hsl(var(--primary) / 0.45), 0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Ambient app background: slate base + two soft light sources (NexQ overlay feel) */
+.app-ambient {
+  background-image:
+    radial-gradient(60rem 32rem at 12% -8%, hsl(var(--primary) / 0.1), transparent 60%),
+    radial-gradient(48rem 28rem at 100% 0%, hsl(199 89% 53% / 0.07), transparent 62%),
+    radial-gradient(40rem 30rem at 50% 120%, hsl(217 91% 60% / 0.06), transparent 60%);
+}
+
+/* ─── Living message entry: spring-physics (from NexQ transcript) ─── */
+@keyframes transcript-enter {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.message-enter {
+  animation: transcript-enter 350ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* ─── Staggered page-load choreography ─── */
+@keyframes dash-enter-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes dash-enter-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes dash-enter-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes dash-enter-scale {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dash-header {
+  animation: dash-enter-down 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dash-sidebar {
+  animation: dash-enter-left 450ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
+}
+.dash-main {
+  animation: dash-enter-up 450ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+.dash-composer {
+  animation: dash-enter-up 350ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+.dash-modal {
+  animation: dash-enter-scale 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Fade / slide helpers ─── */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-in {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: fade-in;
+}
+.slide-up {
+  animation-name: slide-up;
+}
+
+/* ─── Toast spring entrance / exit ─── */
+@keyframes toast-spring-in {
+  0% {
+    transform: translateX(120%) scale(0.92);
+    opacity: 0;
+  }
+  65% {
+    transform: translateX(-3%) scale(1.01);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+.toast-enter {
+  animation: toast-spring-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes toast-slide-out {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110%) scale(0.92);
+    opacity: 0;
+  }
+}
+.toast-exit {
+  animation: toast-slide-out 280ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+@keyframes toast-progress-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+.toast-progress-bar {
+  transform-origin: left;
+  animation: toast-progress-shrink 4000ms linear both;
+}
+@keyframes toast-icon-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.toast-icon-pop {
+  animation: toast-icon-pop 350ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+/* ─── Settings / panel content entrance ─── */
+@keyframes settings-content-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.settings-content-enter {
+  animation: settings-content-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Streaming: blinking caret + "thinking" shimmer ─── */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.stream-caret {
+  display: inline-block;
+  width: 0.5rem;
+  height: 1rem;
+  margin-left: 2px;
+  vertical-align: -0.15rem;
+  border-radius: 1px;
+  background: hsl(var(--primary));
+  animation: caret-blink 1s steps(1, end) infinite;
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.55) 0%,
+    hsl(var(--foreground) / 0.95) 45%,
+    hsl(var(--muted-foreground) / 0.55) 90%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-bg 1.8s linear infinite;
+}
+@keyframes shimmer-bg {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+/* Typing dots */
+@keyframes dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: dot-bounce 1.2s infinite ease-in-out both;
+}
+
+/* ─── Drop zone ─── */
+.dropzone-active {
+  border-color: hsl(var(--primary) / 0.6) !important;
+  background: hsl(var(--primary) / 0.06);
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.25);
+}
+
+/* ─── Toggle switch (NexQ settings switch) ─── */
+.toggle-switch {
+  @apply relative h-6 w-11 cursor-pointer rounded-full transition-colors duration-200;
+}
+.toggle-switch::after {
+  content: "";
+  @apply absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200;
+}
+.toggle-switch[data-checked="true"] {
+  @apply bg-primary;
+}
+.toggle-switch[data-checked="true"]::after {
+  transform: translateX(1.25rem);
+}
+.toggle-switch[data-checked="false"] {
+  @apply bg-muted;
+}
+
+/* ─── Markdown prose (chat answers) ─── */
+.nexq-prose {
+  @apply text-[13.5px] leading-relaxed text-foreground/90;
+  word-break: break-word;
+}
+.nexq-prose > *:first-child {
+  margin-top: 0 !important;
+}
+.nexq-prose > *:last-child {
+  margin-bottom: 0 !important;
+}
+.nexq-prose p {
+  @apply my-2.5;
+}
+.nexq-prose h1 {
+  @apply mb-3 mt-5 text-lg font-semibold text-foreground;
+}
+.nexq-prose h2 {
+  @apply mb-2.5 mt-5 text-base font-semibold text-foreground;
+}
+.nexq-prose h3 {
+  @apply mb-2 mt-4 text-sm font-semibold text-foreground;
+}
+.nexq-prose h4,
+.nexq-prose h5,
+.nexq-prose h6 {
+  @apply mb-2 mt-3 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground;
+}
+.nexq-prose ul {
+  @apply my-2.5 list-disc space-y-1 pl-5;
+}
+.nexq-prose ol {
+  @apply my-2.5 list-decimal space-y-1 pl-5;
+}
+.nexq-prose li::marker {
+  color: hsl(var(--primary) / 0.75);
+}
+.nexq-prose li > ul,
+.nexq-prose li > ol {
+  @apply my-1;
+}
+.nexq-prose a {
+  @apply font-medium text-primary underline decoration-primary/40 underline-offset-2 transition-colors hover:decoration-primary;
+}
+.nexq-prose blockquote {
+  @apply my-3 border-l-2 border-primary/50 bg-primary/5 py-1.5 pl-3 pr-2 text-muted-foreground;
+}
+.nexq-prose hr {
+  @apply my-4 border-border;
+}
+.nexq-prose strong {
+  @apply font-semibold text-foreground;
+}
+.nexq-prose em {
+  @apply italic;
+}
+.nexq-prose table {
+  @apply my-3 w-full border-collapse overflow-hidden rounded-lg text-xs;
+}
+.nexq-prose th {
+  @apply border border-border bg-muted/60 px-2.5 py-1.5 text-left font-semibold text-foreground;
+}
+.nexq-prose td {
+  @apply border border-border px-2.5 py-1.5 align-top;
+}
+.nexq-prose img {
+  @apply my-2 max-w-full rounded-lg border border-border;
+}
+.nexq-prose :not(pre) > code {
+  @apply rounded border border-border bg-muted/70 px-1.5 py-0.5 font-mono text-[12px] text-highlight;
+}
+.nexq-prose input[type="checkbox"] {
+  @apply mr-1.5 align-middle accent-primary;
+  accent-color: hsl(var(--primary));
+}
+
+/* Focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.7);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Ensure select/option elements use theme colors */
+select option {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Respect reduced motion preferences (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
