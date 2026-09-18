@@ -40,6 +40,8 @@ export const DEFAULT_IMAGE_PROMPT = "请详细分析这张图片，并解释你�
 /** Streaming watchdog: abort if the connection stalls. */
 export const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 export const IDLE_TIMEOUT_MS = 90_000;
+/** After `[DONE]`, how long to wait for the server to close the response. */
+export const DONE_GRACE_MS = 2_000;
 
 export const DEFAULT_SETTINGS = {
   thinkingEnabled: true,

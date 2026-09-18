@@ -3,6 +3,7 @@ import {
   CHAT_COMPLETIONS_URL,
   DEEPSEEK_MODEL,
   DEFAULT_IMAGE_PROMPT,
+  DONE_GRACE_MS,
   FIRST_TOKEN_TIMEOUT_MS,
   IDLE_TIMEOUT_MS,
 } from "./constants";
@@ -126,6 +127,8 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
   let finishReason: string | null = null;
   let usage: TokenUsage | null = null;
   let model = DEEPSEEK_MODEL;
+  /** Set once `data: [DONE]` arrives — the answer is complete at that point. */
+  let sawDone = false;
 
   const cleanup = () => {
     if (timer) clearTimeout(timer);
@@ -165,7 +168,16 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
 
       const data = event.data.trim();
       if (!data) continue;
-      if (data === "[DONE]") break;
+      if (data === "[DONE]") {
+        // The answer is complete. Keep reading until the server closes the
+        // response instead of cancelling it (a cancelled body shows up as an
+        // aborted request in devtools), but give it a short grace window so a
+        // connection that stays open can never look like a failed turn.
+        sawDone = true;
+        armWatchdog(DONE_GRACE_MS);
+        continue;
+      }
+      if (sawDone) continue;
 
       let chunk: ChatCompletionChunk;
       try {
@@ -224,6 +236,18 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
       };
     }
     if (timedOut) {
+      // A completed answer is never a timeout, even if the server lingers.
+      if (sawDone) {
+        return {
+          content,
+          reasoning,
+          finishReason,
+          usage,
+          model,
+          aborted: false,
+          durationMs: performance.now() - startedAt,
+        };
+      }
       throw timeoutError(content || reasoning ? "idle" : "connect");
     }
     if (err instanceof DeepSeekError) throw err;
