@@ -154,6 +154,9 @@ function EmptyState({
         <p className="mt-2.5 text-xs font-medium text-foreground">粘贴问题，直接问 AI</p>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
           开启上方的「附带最近字幕」，回答就会结合你刚听到的内容。
+          <br />
+          也可以点回形针上传 <span className="text-foreground/80">PDF / TXT / DOCX</span>
+          ，内容会随问题一起发给模型。
         </p>
 
         <div className="mt-3 grid w-full grid-cols-1 gap-1.5">

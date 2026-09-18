@@ -54,6 +54,10 @@ const check = (name, ok, extra = "") => {
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".webmanifest": "application/manifest+json",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -332,7 +336,7 @@ try {
   group("M5 · paste-and-ask works with the on-screen keyboard");
   const input = page.locator('aside[aria-label="问答"] textarea').first();
   await input.fill("这句话里有哪些生词？");
-  await page.getByRole("button", { name: "发送" }).click();
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   await page.waitForTimeout(1500);
   check("typed question was sent", state.askTexts.at(-1) === "这句话里有哪些生词？", JSON.stringify(state.askTexts.at(-1) ?? null));
 

@@ -54,7 +54,9 @@ export function buildApiMessages(
   history: ChatMessage[],
   settings: AppSettings,
   /** Optional transient context (e.g. the live transcript) for this request only. */
-  contextText?: string
+  contextText?: string,
+  /** Optional attached document text for this request only. */
+  documentsText?: string
 ): ApiMessage[] {
   const usable = history.filter(
     (m) => m.role !== "system" && (m.content.trim().length > 0 || (m.images?.length ?? 0) > 0)
@@ -69,6 +71,12 @@ export function buildApiMessages(
   const out: ApiMessage[] = [];
   const systemPrompt = settings.systemPrompt.trim();
   if (systemPrompt) out.push({ role: "system", content: systemPrompt });
+
+  // Attached documents come first: they are the largest, most stable context.
+  const documents = documentsText?.trim();
+  if (documents) {
+    out.push({ role: "system", content: documents });
+  }
 
   // The live transcript rides along as extra system context: it is fresh on
   // every turn (so follow-up questions see the newest subtitles) and is never

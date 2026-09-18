@@ -425,15 +425,8 @@ export function SettingsPanel({
 
           {/* ── About ── */}
           <Section icon={<Info className="h-3.5 w-3.5" />} title="About">
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              TalkQ Web is a static, browser-only DeepSeek client. There is no Tauri shell, no Rust,
-              no Node backend, no proxy and no telemetry: the bundle you loaded is the whole app.
-            </p>
-            <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
-              The only network destination is{" "}
-              <span className="font-mono text-foreground/80">{DEEPSEEK_BASE_URL}</span>. Your key is
-              kept in <span className="font-mono">localStorage</span> and sent only in the
-              Authorization header of your own requests.
+            <p className="py-6 text-center text-xl font-semibold tracking-wide text-foreground sm:text-2xl">
+              梁圣的恩情是还不完的
             </p>
           </Section>
         </div>

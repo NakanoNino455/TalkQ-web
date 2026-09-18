@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CornerDownLeft,
+  FileUp,
   ImagePlus,
   Loader2,
   SendHorizontal,
@@ -8,8 +9,10 @@ import {
   Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { DocumentStrip } from "./DocumentStrip";
 import { ImageStrip } from "./ImageStrip";
 import { ACCEPT_ATTR, DEEPSEEK_MODEL, IMAGE_LIMITS } from "@/lib/constants";
+import { DOCUMENT_ACCEPT, extractDocuments } from "@/lib/documents";
 import { attachmentsFromFiles, imageFilesFromClipboard, imageFilesFromDrop } from "@/lib/images";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
@@ -33,6 +36,9 @@ export function Composer({
   const draft = useChatStore((s) => s.draft);
   const setDraft = useChatStore((s) => s.setDraft);
   const draftImages = useChatStore((s) => s.draftImages);
+  const draftDocuments = useChatStore((s) => s.draftDocuments);
+  const addDraftDocuments = useChatStore((s) => s.addDraftDocuments);
+  const removeDraftDocument = useChatStore((s) => s.removeDraftDocument);
   const addDraftImages = useChatStore((s) => s.addDraftImages);
   const removeDraftImage = useChatStore((s) => s.removeDraftImage);
   const send = useChatStore((s) => s.send);
@@ -44,12 +50,15 @@ export function Composer({
 
   const [dragActive, setDragActive] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  const [readingDocs, setReadingDocs] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
-  const hasPayload = draft.trim().length > 0 || draftImages.length > 0;
+  const hasPayload =
+    draft.trim().length > 0 || draftImages.length > 0 || draftDocuments.length > 0;
   const canSend = hasPayload && !isStreaming && Boolean(apiKey);
 
   /* Auto-grow the textarea (1 → 8 rows). */
@@ -73,6 +82,27 @@ export function Composer({
       }
     },
     [addDraftImages]
+  );
+
+  const attachDocuments = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      setReadingDocs(true);
+      try {
+        const { documents, errors } = await extractDocuments(files);
+        if (documents.length > 0) {
+          addDraftDocuments(documents);
+          showToast(
+            "success",
+            `已读取 ${documents.length} 个文档`,
+            documents.map((doc) => `${doc.name} · ${doc.chars} 字`).join("；")
+          );
+        }
+        for (const message of errors) showToast("error", "文档读取失败", message);      } finally {
+        setReadingDocs(false);
+      }
+    },
+    [addDraftDocuments]
   );
 
   /* Ctrl+V — screenshots copied with Win+Shift+S land here. */
@@ -152,6 +182,11 @@ export function Composer({
         )}
       >
         <ImageStrip images={draftImages} onRemove={removeDraftImage} />
+        <DocumentStrip
+          documents={draftDocuments}
+          onRemove={removeDraftDocument}
+          busy={readingDocs}
+        />
 
         <div className="relative">
           <textarea
@@ -201,13 +236,41 @@ export function Composer({
             size="icon"
             onClick={() => fileInputRef.current?.click()}
             disabled={!apiKey || attaching}
-            title={`Attach ${IMAGE_LIMITS.formatLabels}`}
-            aria-label="Attach images"
+            title={`附加图片（${IMAGE_LIMITS.formatLabels}）`}
+            aria-label="附加图片"
           >
             {attaching ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ImagePlus className="h-4 w-4" />
+            )}
+          </Button>
+
+          <input
+            ref={docInputRef}
+            type="file"
+            accept={DOCUMENT_ACCEPT}
+            multiple
+            className="hidden"
+            onChange={async (event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              await attachDocuments(files);
+            }}
+          />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => docInputRef.current?.click()}
+            disabled={!apiKey || readingDocs}
+            title="上传文档（PDF / TXT / DOCX），内容会随提问一起发送"
+            aria-label="上传文档"
+          >
+            {readingDocs ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileUp className="h-4 w-4" />
             )}
           </Button>
 

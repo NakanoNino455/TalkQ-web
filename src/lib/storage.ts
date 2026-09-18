@@ -1,4 +1,4 @@
-import type { AppSettings, ChatMessage, Conversation } from "@/types";
+import type { AppSettings, ChatMessage, Conversation, DocumentAttachment } from "@/types";
 import { DEFAULT_SETTINGS, LEGACY_STORAGE_KEYS, STORAGE_KEYS } from "./constants";
 
 /**
@@ -171,6 +171,42 @@ export function clearStoredHistory(): void {
 export function eraseAllLocalData(): void {
   safeRemove(STORAGE_KEYS.chatHistory);
   safeRemove(STORAGE_KEYS.transcript);
+  safeRemove(STORAGE_KEYS.documents);
   safeRemove(STORAGE_KEYS.settings);
   safeRemove(STORAGE_KEYS.apiKey);
+}
+
+/* ── Attached documents (text extracted from PDF/TXT/DOCX) ───────────── */
+
+/** Above this the tray is kept in memory only, to protect the quota. */
+const MAX_PERSISTED_DOCUMENT_BYTES = 1_500_000;
+
+export function loadDocuments(): DocumentAttachment[] {
+  const raw = safeGet(STORAGE_KEYS.documents);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (doc): doc is DocumentAttachment =>
+        Boolean(doc) &&
+        typeof doc === "object" &&
+        typeof (doc as DocumentAttachment).id === "string" &&
+        typeof (doc as DocumentAttachment).name === "string" &&
+        typeof (doc as DocumentAttachment).text === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Returns false when the tray was too large to persist (it still works in memory). */
+export function saveDocuments(documents: DocumentAttachment[]): boolean {
+  if (documents.length === 0) {
+    safeRemove(STORAGE_KEYS.documents);
+    return true;
+  }
+  const payload = JSON.stringify(documents);
+  if (payload.length > MAX_PERSISTED_DOCUMENT_BYTES) return false;
+  return safeSet(STORAGE_KEYS.documents, payload);
 }

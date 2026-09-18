@@ -116,7 +116,7 @@ check(
 );
 
 await composer.fill("测试文件版流式输出");
-await page.getByRole("button", { name: "发送" }).click();
+await page.getByRole("button", { name: "发送", exact: true }).click();
 await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 20000 });
 const answer = await page.locator(".nexq-prose").first().innerText();
 check("streamed answer rendered", answer.includes("文件版") && answer.includes("流式"), answer.slice(0, 40));

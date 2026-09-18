@@ -132,10 +132,17 @@ npm run icons "D:\pics\my-avatar.png"  # 或指定任意图片
 不用切换模式，问答栏一直贴在右侧（窄屏会变成抽屉，`Ctrl/Cmd + Shift + K` 可收起/展开）：
 
 * **粘贴即问**：把任何文字粘进输入框，回车发送，答案流式出现
+* **上传文档**：输入框左边的回形针按钮支持 **PDF / TXT / DOCX**，解析出的文字会随提问一起发给模型：
+  * TXT 自动处理 UTF-8 / GBK 编码（Windows 中文记事本存的文件也能读）
+  * DOCX 在浏览器里解压 `word/document.xml`（用的是浏览器自带的 `DecompressionStream`，不需要额外库）
+  * PDF 用 **按需加载的 pdf.js** 解析（首次上传 PDF 时才下载约 480KB 的解析器 + worker，不影响首屏）
+  * 文档会一直挂在输入框上方，**每次提问都会带上**（方便连续追问同一个文件），点 `×` 即可移除；刷新后仍在（超过约 1.5MB 的文本只留在内存里）
+  * 上限：单文件 20MB / 单文档 12 万字 / 一次最多 5 个（超出会截断并提示）
+  * 扫描版（图片型）PDF 没有可提取文字，会明确告诉你改用截图提问
 * **附带最近字幕作为上下文**（默认开）：提问时自动带上最近 12 句字幕，所以可以直接问
-  「刚才那句话什么意思」「帮我把这段总结成 3 点」「这段代码有问题吗」
-* 上下文**只影响这一次请求**，不会混进你看到的对话记录里；每轮都会带上最新字幕
-* 关掉这个开关，它就是一个普通的多轮对话（同样支持图片、Markdown、代码块复制、Regenerate）
+  「刚才那句话什么意思」「帮我把这段总结成 3 点」「这份 PDF 的结论是什么」
+* 上下文与文档**只影响这一次请求**，不会混进你看到的对话记录里；每轮都会带上最新的字幕与文档
+* 关掉字幕开关，它就是一个普通的多轮对话（同样支持图片、Markdown、代码块复制、Regenerate）
 * 左侧栏「问答记录」保存历史会话，只存在本机浏览器
 
 ### 架构（为什么必须这样）
@@ -310,6 +317,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 | `talkq_settings` | 思考模式、系统提示词、Enter 发送、翻译方向与识别语言等偏好 |
 | `talkq_chat_history` | 对话会话与消息（含图片 data URL） |
 | `talkq_translate_transcript` | 实时翻译字幕记录（最近 200 句，可关闭保存） |
+| `talkq_documents` | 已上传文档的抽取文本（超过约 1.5MB 时仅留在内存） |
 
 **从 NexQ 升级**：首次加载会把旧的 `nexq_*` 四个键复制成 `talkq_*`（旧键保留不删，方便回滚），所以你之前输入的 API Key 和聊天/字幕记录都不会丢。
 
@@ -346,6 +354,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 | 18 | **手机-分享跳转** | 在手机上点某条字幕的分享按钮 | 自动跳到「问答」标签并立即发送该句英文 |
 | 19 | **品牌与图标** | 看标签页标题/图标、地址栏、以及「添加到主屏幕」 | 名称为 **TalkQ**，图标是源图生成的那套（标签页、主屏图标都正常） |
 | 20 | **从旧版本升级** | 若你之前用过 NexQ 版本（localStorage 里是 `nexq_*`） | 自动迁移到 `talkq_*`，不需要重新输入 API Key，历史记录仍在 |
+| 21 | **上传文档** | 点问答栏输入框左边的回形针 → 选一个 PDF / TXT / DOCX | 出现文档标签（名称 / 类型 / 字数），提问后回答会引用文档内容；`×` 可移除 |
 
 > 测试 3–8、10–18 需要你自己的真实 DeepSeek API Key，测试 10–18 还需要 Chrome/Edge + 可用的麦克风。
 > 仓库里不含 Key，我也没有替你写入任何 Key。
@@ -360,7 +369,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
 npm run verify:e2e                    # 问答/对话 + 品牌/图标/键迁移：74 项断言
-npm run verify:translate              # 实时翻译 + 问答栏：51 项断言
+npm run verify:translate              # 实时翻译 + 问答栏 + 文档上传：70 项断言
 npm run verify:mobile                 # 手机布局（390×844 触屏视口）：37 项断言
 npm run verify:live-mobile            # 线上手机实测（可传 URL 覆盖）
 npm run verify:live-mobile https://your.site/nexq-web/
@@ -409,6 +418,7 @@ src/
 │   ├── TopBar.tsx          # 实时翻译状态 · DeepSeek Flash · 麦克风状态 · 问答栏开关
 │   ├── TranslateView.tsx   # 实时翻译主界面（开始/停止、方向、语向、导出）
 │   ├── AskPanel.tsx        # 内嵌问答栏（粘贴提问 + 字幕上下文开关）
+│   ├── DocumentStrip.tsx   # 已上传文档的标签（名称/类型/字数/移除）
 │   ├── SegmentCard.tsx     # 一条双语字幕（原文 + 流式译文 + 单条操作/提问）
 │   ├── MicMeter.tsx        # 麦克风电平表（滚动条柱）
 │   ├── ChatView.tsx        # 消息列表 / 吸底滚动 / 空状态快捷操作
@@ -425,7 +435,8 @@ src/
 │   ├── constants.ts        # 唯一外部 API、模型名、存储键、图片/翻译限制
 │   ├── speech.ts           # Web Speech API 封装（自动重连、错误分类）
 │   ├── mic.ts              # 麦克风权限 + 电平分析（不录音）
-│   ├── translate.ts        # 语向判定 + 流式翻译（复用小请求核心）
+│   ├── translate.ts        # 语向判定 + 流式翻译（复用请求核心）
+│   ├── documents.ts        # PDF/TXT/DOCX 文本抽取（pdf.js 按需 + 浏览器解压 ZIP）
 │   ├── deepseek.ts         # 请求构造 + 流式 + Test Connection
 │   ├── sse.ts              # 手写 SSE 解析（跨 chunk、[DONE]、多行 data）
 │   ├── errors.ts           # 错误分类与用户文案

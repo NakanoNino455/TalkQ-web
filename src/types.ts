@@ -37,6 +37,27 @@ export interface MessageError {
   status?: number;
 }
 
+/* ── Documents attached to a question ────────────────────────────────── */
+
+export type DocumentKind = "pdf" | "txt" | "docx";
+
+/** Text extracted from an uploaded file, kept in memory for the session. */
+export interface DocumentAttachment {
+  id: string;
+  name: string;
+  kind: DocumentKind;
+  /** Original file size in bytes. */
+  size: number;
+  /** Extracted plain text (what actually rides along with the question). */
+  text: string;
+  chars: number;
+  pages?: number;
+  /** True when the text was cut off at the configured limit. */
+  truncated?: boolean;
+  /** Extra hint, e.g. "扫描版 PDF 没有可提取文字". */
+  note?: string;
+}
+
 export interface TokenUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
@@ -52,6 +73,8 @@ export interface ChatMessage {
   /** Chain-of-thought returned by DeepSeek thinking mode. */
   reasoning?: string;
   images?: ImageAttachment[];
+  /** Names of the documents attached to this turn (their text stays in memory). */
+  documentNames?: string[];
   createdAt: number;
   model?: string;
   status: MessageStatus;

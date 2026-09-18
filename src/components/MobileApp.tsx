@@ -439,7 +439,6 @@ function MobileEmpty({ listening, onStart }: { listening: boolean; onStart: () =
       </h2>
       <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-muted-foreground">
         会先请求<strong className="text-foreground/80">麦克风权限</strong>，允许后边说边出双语字幕。
-        需要 Chrome / Edge。
       </p>
 
       <div className="mt-5 w-full max-w-xs space-y-1.5 text-left">

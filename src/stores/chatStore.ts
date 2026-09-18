@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation, ImageAttachment, MessageError } from "@/types";
+import type { ChatMessage, Conversation, DocumentAttachment, ImageAttachment, MessageError } from "@/types";
 import { DEEPSEEK_MODEL } from "@/lib/constants";
 import { buildApiMessages, streamChat } from "@/lib/deepseek";
 import { DeepSeekError, isRetryable, toDeepSeekError } from "@/lib/errors";
 import { assertBodyBudget, composeUserText } from "@/lib/images";
-import { loadConversations, saveConversations } from "@/lib/storage";
+import { loadConversations, loadDocuments, saveConversations, saveDocuments } from "@/lib/storage";
 import { truncate, uid } from "@/lib/utils";
 import { useSettingsStore } from "./settingsStore";
 import { showToast } from "./toastStore";
@@ -20,6 +20,8 @@ interface ChatState {
   activeId: string | null;
   draft: string;
   draftImages: ImageAttachment[];
+  /** Documents attached to the next questions (text kept in memory + localStorage). */
+  draftDocuments: DocumentAttachment[];
   isStreaming: boolean;
   streamingMessageId: string | null;
   hydrated: boolean;
@@ -33,10 +35,16 @@ interface ChatState {
 
   setDraft: (text: string) => void;
   addDraftImages: (images: ImageAttachment[]) => void;
+  addDraftDocuments: (documents: DocumentAttachment[]) => void;
+  removeDraftDocument: (id: string) => void;
+  clearDraftDocuments: () => void;
   removeDraftImage: (id: string) => void;
   clearDraftImages: () => void;
 
-  send: (overrideText?: string, options?: { contextText?: string }) => Promise<void>;
+  send: (
+    overrideText?: string,
+    options?: { contextText?: string; documentsText?: string }
+  ) => Promise<void>;
   stop: () => void;
   regenerate: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
@@ -95,6 +103,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeId: null,
   draft: "",
   draftImages: [],
+  draftDocuments: [],
   isStreaming: false,
   streamingMessageId: null,
   hydrated: false,
@@ -105,6 +114,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       conversations,
       activeId: conversations[0]?.id ?? null,
+      draftDocuments: loadDocuments(),
       hydrated: true,
     });
   },
@@ -157,6 +167,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearDraftImages: () => set({ draftImages: [] }),
 
+  addDraftDocuments: (documents) => {
+    if (documents.length === 0) return;
+    set((state) => ({ draftDocuments: [...state.draftDocuments, ...documents].slice(-5) }));
+    if (!saveDocuments(get().draftDocuments)) {
+      showToast(
+        "info",
+        "文档较大，未保存到本地",
+        "它仍会在本次会话中随问题一起发送，刷新页面后需要重新上传。"
+      );
+    }
+  },
+
+  removeDraftDocument: (id) => {
+    set((state) => ({ draftDocuments: state.draftDocuments.filter((doc) => doc.id !== id) }));
+    saveDocuments(get().draftDocuments);
+  },
+
+  clearDraftDocuments: () => {
+    set({ draftDocuments: [] });
+    saveDocuments([]);
+  },
+
   send: async (overrideText, options) => {
     const state = get();
     if (state.isStreaming) return;
@@ -183,8 +215,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId = created.id;
     }
 
+    const documents = state.draftDocuments;
     const userMessage = makeMessage("user", composed, {
       images: images.length ? images : undefined,
+      documentNames: documents.length ? documents.map((doc) => doc.name) : undefined,
     });
 
     const updatedConversations = conversations.map((c) =>
@@ -207,7 +241,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     schedulePersist(updatedConversations);
 
     const history = updatedConversations.find((c) => c.id === conversationId)!.messages;
-    await runCompletion(conversationId, history, set, get, options?.contextText);
+    await runCompletion(conversationId, history, set, get, options?.contextText, options?.documentsText);
   },
 
   stop: () => {
@@ -274,7 +308,8 @@ async function runCompletion(
   history: ChatMessage[],
   set: SetState,
   get: GetState,
-  contextText?: string
+  contextText?: string,
+  documentsText?: string
 ): Promise<void> {
   const { apiKey, settings } = useSettingsStore.getState();
   if (!apiKey) {
@@ -329,7 +364,7 @@ async function runCompletion(
   const controller = new AbortController();
   activeController = controller;
 
-  const apiMessages = buildApiMessages(history, settings, contextText);
+  const apiMessages = buildApiMessages(history, settings, contextText, documentsText);
 
   try {
     let attempt = 0;

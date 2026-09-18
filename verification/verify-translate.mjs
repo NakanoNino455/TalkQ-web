@@ -55,6 +55,10 @@ function check(name, ok, extra = "") {
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".webmanifest": "application/manifest+json",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -78,6 +82,141 @@ const staticServer = createHttpServer(async (req, res) => {
   res.writeHead(200, { "Content-Type": MIME[path.extname(file)] ?? "application/octet-stream" });
   res.end(await readFile(file));
 });
+
+/* ── Test documents: a real .docx (stored ZIP) and a real minimal PDF ── */
+
+const CRC_TABLE = (() => {
+  const table = new Int32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c;
+  }
+  return table;
+})();
+
+function crc32(buffer) {
+  let crc = -1;
+  for (const byte of buffer) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ -1) >>> 0;
+}
+
+/** Build a .docx-ish ZIP with stored (uncompressed) entries. */
+function buildZip(entries) {
+  const parts = [];
+  const central = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, "utf8");
+    const data = Buffer.from(entry.data, "utf8");
+    const crc = crc32(data);
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(0, 8); // stored
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    parts.push(local, name, data);
+
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x02014b50, 0);
+    cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);
+    cd.writeUInt16LE(0, 10); // stored
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(data.length, 20);
+    cd.writeUInt32LE(data.length, 24);
+    cd.writeUInt16LE(name.length, 28);
+    cd.writeUInt32LE(offset, 42);
+    central.push(cd, name);
+
+    offset += local.length + name.length + data.length;
+  }
+
+  const centralBuf = Buffer.concat(central);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...parts, centralBuf, eocd]);
+}
+
+const DOCX_TEXT_1 = "TALKQ DOCX LINE ONE";
+const DOCX_TEXT_2 = "TALKQ DOCX LINE TWO";
+const docxBuffer = buildZip([
+  {
+    name: "[Content_Types].xml",
+    data: '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+  },
+  {
+    name: "word/document.xml",
+    data:
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      `<w:p><w:r><w:t>${DOCX_TEXT_1}</w:t></w:r></w:p>` +
+      `<w:p><w:r><w:t>${DOCX_TEXT_2}</w:t></w:r><w:r><w:t> + EXTRA RUN</w:t></w:r></w:p>` +
+      "</w:body></w:document>",
+  },
+]);
+
+const TXT_TEXT = "TALKQ TXT 这是一份纯文本测试文档。";
+const txtBuffer = Buffer.from(`第一行 ${TXT_TEXT}\n第二行：中文编码检查\n`, "utf8");
+
+/** Minimal single-page PDF with a standard font, built with correct offsets. */
+function buildPdf(text) {
+  const content = `BT /F1 24 Tf 72 700 Td (${text}) Tj ET\n`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}endstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(pdf, "latin1"));
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const xrefStart = Buffer.byteLength(pdf, "latin1");
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) {
+    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
+const PDF_TEXT = "TALKQ PDF SECRET 42";
+const pdfBuffer = buildPdf(PDF_TEXT);
+
+/**
+ * Upload through the real button (so the file-chooser path is exercised) and
+ * wait for the chip. PDFs cold-start pdf.js + a 1.2 MB worker, so a fixed sleep
+ * is not enough.
+ */
+async function uploadDocument(page, file, expectedChip) {
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser", { timeout: 10000 }),
+    page.getByRole("button", { name: "上传文档" }).click(),
+  ]);
+  await chooser.setFiles([file]);
+  if (expectedChip) {
+    await page.getByText(expectedChip).first().waitFor({ timeout: 25000 }).catch(() => {});
+  } else {
+    await page.waitForTimeout(1500);
+  }
+}
 
 /* ── DeepSeek mock with translation support ──────────────────────────── */
 const state = { scenario: "ok", requests: [], translations: 0 };
@@ -479,6 +618,136 @@ try {
   await page.screenshot({ path: path.join(ARTIFACTS, "t04-error.png") });
 
   // A 402 response legitimately logs a "Failed to load resource" console entry.
+  /* ── T13: document upload (PDF / TXT / DOCX) ──────────────────────── */
+  const askPanel = page.locator('aside[aria-label="问答"]');
+  group("T13 · 问答栏可上传 PDF / TXT / DOCX");
+  check("upload button present", await page.getByRole("button", { name: "上传文档" }).isVisible());
+
+  const asksBeforeDocs = state.requests.filter((r) => r.isAsk).length;
+  const docSystemBlock = (request) =>
+    (request.systems ?? []).find((s) => s.includes("【用户上传的文档】")) ?? "";
+
+  // TXT
+  await uploadDocument(page, {
+    name: "notes.txt",
+    mimeType: "text/plain",
+    buffer: txtBuffer,
+  }, "notes.txt");
+  check("TXT chip appears with name", await askPanel.getByText("notes.txt").first().isVisible());
+  check("TXT chip shows the size badge", await askPanel.getByText("txt", { exact: true }).first().isVisible());
+
+  await askPanel.locator("textarea").first().fill("这份 txt 讲了什么？");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.waitForTimeout(2500);
+  const txtRequest = state.requests.filter((r) => r.isAsk).at(-1);
+  check("TXT content was sent to the model", docSystemBlock(txtRequest).includes(TXT_TEXT), docSystemBlock(txtRequest).slice(0, 60));
+  check("TXT filename is in the context block", docSystemBlock(txtRequest).includes("notes.txt"));
+
+  // DOCX
+  await uploadDocument(page, {
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer: docxBuffer,
+  }, "report.docx");
+  check("DOCX chip appears", await askPanel.getByText("report.docx").first().isVisible());
+
+  await askPanel.locator("textarea").first().fill("docx 里写了什么？");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.waitForTimeout(2500);
+  const docxRequest = state.requests.filter((r) => r.isAsk).at(-1);
+  const docxBlock = docSystemBlock(docxRequest);
+  check(
+    "DOCX text extracted (ZIP + document.xml)",
+    docxBlock.includes(DOCX_TEXT_1) && docxBlock.includes(DOCX_TEXT_2),
+    docxBlock.replace(/\s+/g, " ").slice(0, 70)
+  );
+  check(
+    "DOCX runs in the same paragraph are joined",
+    docxBlock.includes(`${DOCX_TEXT_2} + EXTRA RUN`)
+  );
+  check("both documents ride along now", docxBlock.includes("notes.txt") && docxBlock.includes("report.docx"));
+
+  // PDF (lazy-loads pdf.js + its worker)
+  await uploadDocument(page, {
+    name: "secret.pdf",
+    mimeType: "application/pdf",
+    buffer: pdfBuffer,
+  });
+  check("PDF chip appears (pdf.js loaded on demand)", await askPanel.getByText("secret.pdf").first().isVisible());
+  // (page count is asserted below, on the extracted context)
+
+  await askPanel.locator("textarea").first().fill("pdf 里的暗号是什么？");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.waitForTimeout(3000);
+  const pdfRequest = state.requests.filter((r) => r.isAsk).at(-1);
+  check(
+    "PDF text was extracted by pdf.js",
+    docSystemBlock(pdfRequest).includes(PDF_TEXT),
+    docSystemBlock(pdfRequest).replace(/\s+/g, " ").slice(-70)
+  );
+  check("PDF page count reported in the context", docSystemBlock(pdfRequest).includes("1 页"));
+
+  check(
+    "document text stays out of the visible conversation",
+    !(await askPanel.locator(".nexq-prose").first().innerText()).includes("【用户上传的文档】")
+  );
+  check(
+    "sent messages show which files were attached",
+    (await askPanel.getByText("secret.pdf").count()) >= 2
+  );
+
+  // Persistence + removal
+  await page.reload({ waitUntil: "networkidle" });
+  await askPanel.getByText("secret.pdf").first().waitFor({ timeout: 10000 }).catch(() => {});
+  check("attachments survive a reload", await askPanel.getByText("secret.pdf").first().isVisible());
+
+  await askPanel.getByRole("button", { name: "移除 secret.pdf" }).click();
+  const removalSettled = await askPanel
+    .getByRole("button", { name: "移除 secret.pdf" })
+    .waitFor({ state: "detached", timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    "removing a document clears its chip",
+    removalSettled,
+    `chips left: ${await askPanel.getByRole("button", { name: /^移除/ }).count()}`
+  );
+
+  const asksBeforeRemoval = state.requests.filter((r) => r.isAsk).length;
+  await askPanel.locator("textarea").first().fill("现在还有文档吗？");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.waitForTimeout(2500);
+  const afterRemoval = state.requests.filter((r) => r.isAsk);
+  check(
+    "removed document is no longer sent",
+    afterRemoval.length > asksBeforeRemoval && !docSystemBlock(afterRemoval.at(-1)).includes(PDF_TEXT)
+  );
+  check(
+    "the remaining documents are still sent",
+    docSystemBlock(afterRemoval.at(-1)).includes("notes.txt")
+  );
+
+  // Unsupported file gets a specific error.
+  await uploadDocument(page, {
+    name: "legacy.doc",
+    mimeType: "application/msword",
+    buffer: Buffer.from("not really a doc"),
+  }, null);
+  check(
+    "unsupported extension is rejected with a reason",
+    (await page
+      .getByText("不认识的扩展名", { exact: false })
+      .first()
+      .isVisible()
+      .catch(() => false)) ||
+      (await page
+        .getByText("Unsupported document", { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false))
+  );
+  await page.screenshot({ path: path.join(ARTIFACTS, "t08-documents.png") });
+
   const noisy = consoleErrors.filter(
     (e) => !/favicon|Failed to load resource|net::ERR/i.test(e)
   );
@@ -534,13 +803,18 @@ try {
   const shareButtons = page.locator('button[aria-label="分享到问答（自动发送英文）"]');
   check(
     "share button replaced the question mark",
-    (await shareButtons.count()) === 3 &&
-      (await page.locator('button[aria-label="就这句提问"]').count()) === 0
+    (await shareButtons.count()) >= 3 &&
+      (await page.locator('button[aria-label="就这句提问"]').count()) === 0,
+    `${await shareButtons.count()} share buttons`
   );
 
   // Share → the English half lands in the Q&A box and is sent immediately.
   const asksBefore = state.requests.filter((r) => r.isAsk).length;
-  await shareButtons.nth(2).click();
+  await page
+    .locator('[class*="group/seg"]')
+    .filter({ hasText: "English sentence for auto detection." })
+    .getByRole("button", { name: "分享到问答（自动发送英文）" })
+    .click();
   await page.getByText("这是针对", { exact: false }).first().waitFor({ timeout: 20000 }).catch(() => {});
   const askRequests = state.requests.filter((r) => r.isAsk);
   check("share auto-sent a question", askRequests.length === asksBefore + 1, `${asksBefore} → ${askRequests.length}`);

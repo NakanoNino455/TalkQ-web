@@ -4,6 +4,7 @@ import {
   Check,
   Clock3,
   Copy,
+  FileText,
   RefreshCw,
   Sparkles,
   Square,
@@ -131,6 +132,20 @@ function UserMessage({
     <div className="message-enter flex justify-end">
       <div className="flex max-w-[min(85%,42rem)] flex-col items-end gap-2">
         {message.images && message.images.length > 0 && <ImageRow images={message.images} />}
+
+        {message.documentNames && message.documentNames.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {message.documentNames.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-2 py-1 text-[11px] text-muted-foreground"
+              >
+                <FileText className="h-3 w-3 text-primary/70" />
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
 
         {message.content && (
           <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-primary/25 bg-primary/10 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-foreground">

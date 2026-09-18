@@ -90,7 +90,7 @@ export function Sidebar({
           </div>
           <p className="mt-1.5 text-xs text-foreground">{translateSegments} 句字幕</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            点主区域麦克风开始；允许权限后浏览器内置识别实时转文字，再由 DeepSeek Flash 逐句翻译。
+            点主区域麦克风开始；允许权限后浏览器内置识别实时转文字，再由 LLM模型 逐句翻译。
             右侧「问答」栏可直接粘贴问题，并带上刚才的字幕一起问。
           </p>
         </div>

@@ -1,3 +1,4 @@
+import { buildDocumentsContext } from "./documents";
 import { buildTranscriptContext } from "./translate";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -8,8 +9,9 @@ import { showToast } from "@/stores/toastStore";
  * Bridge between the live-translation surface and the embedded Q&A panel.
  *
  * Both the panel's composer and the subtitle share button go through here, so a
- * question always rides along with the newest subtitles (when that switch is on)
- * and the visible conversation keeps only what the user actually typed.
+ * question always rides along with the attached documents and the newest
+ * subtitles (when that switch is on) while the visible conversation keeps only
+ * what the user actually typed.
  */
 export async function askDeepSeek(overrideText?: string): Promise<boolean> {
   const chat = useChatStore.getState();
@@ -22,7 +24,8 @@ export async function askDeepSeek(overrideText?: string): Promise<boolean> {
   const context = settings.askUseTranscriptContext
     ? buildTranscriptContext(useTranslateStore.getState().segments)
     : undefined;
+  const documents = buildDocumentsContext(chat.draftDocuments);
 
-  await chat.send(overrideText, { contextText: context });
+  await chat.send(overrideText, { contextText: context, documentsText: documents });
   return true;
 }

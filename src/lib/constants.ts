@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   settings: "talkq_settings",
   chatHistory: "talkq_chat_history",
   transcript: "talkq_translate_transcript",
+  documents: "talkq_documents",
 } as const;
 
 /**
