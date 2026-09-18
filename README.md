@@ -3,6 +3,19 @@
 **100% 浏览器端（Browser-Only）的 DeepSeek 客户端。**
 把 NexQ 的前端 UI/UX 保留下来，去掉全部桌面后端：没有 Tauri、没有 Rust、没有 Node 服务、没有 API Proxy、没有数据库。构建产物 `dist/` 是纯静态文件，直接丢到 GitHub Pages 就能用。
 
+### 🚀 线上地址：**https://nakanonino455.github.io/nexq-web/**
+
+[![Deploy to GitHub Pages](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml)
+
+![NexQ Web 对话界面](docs/screenshot.png)
+
+<details>
+<summary>首次使用截图（API Key Modal）</summary>
+
+![API Key Modal](docs/screenshot-api-key-modal.png)
+
+</details>
+
 ```
 GitHub Pages → 浏览器打开网页 → 输入一次 DeepSeek API Key（存 localStorage）
              → deepseek-flash 流式对话 · 图片理解 · 1M 上下文
