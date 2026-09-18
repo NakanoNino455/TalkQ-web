@@ -340,7 +340,7 @@ const composer = () => page.locator("textarea").first();
 
 async function typeAndSend(text) {
   await composer().fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "发送" }).click();
 }
 
 try {
@@ -407,7 +407,7 @@ try {
   const stillStreaming = await streamingBadge.first().isVisible().catch(() => false);
   check("first tokens render before completion", partial.length > 0 && stillStreaming, `${partial.length} chars mid-stream`);
 
-  await page.getByRole("button", { name: "Stop generating" }).waitFor({ state: "hidden", timeout: 15000 });
+  await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 15000 });
   const answer = await page.locator(".nexq-prose").first().innerText();
   check("full answer rendered", answer.includes("支持 Markdown") && answer.includes("你好"), answer.slice(0, 60));
   check("thinking block appeared", await page.getByText("Thought", { exact: false }).first().isVisible());
@@ -434,7 +434,7 @@ try {
     undefined,
     { timeout: 15000 }
   );
-  await page.getByRole("button", { name: "Stop generating" }).waitFor({ state: "hidden", timeout: 15000 });
+  await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 15000 });
   const secondPayload = state.requests.at(-1);
   const roles = (secondPayload?.body?.messages ?? []).map((m) => m.role).join(",");
   check(
@@ -472,7 +472,7 @@ try {
   /* ── T7: image-only send + vision payload ──────────────────────────── */
   group("T7 · image-only send uses the default analysis prompt");
   await typeAndSend("");
-  await page.getByRole("button", { name: "Stop generating" }).waitFor({ state: "hidden", timeout: 20000 });
+  await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 20000 });
   const imagePayload = state.requests.at(-1);
   const lastMessage = imagePayload?.body?.messages?.at(-1);
   const blocks = Array.isArray(lastMessage?.content) ? lastMessage.content : [];
@@ -497,7 +497,7 @@ try {
   );
   const midText = await page.locator(".nexq-prose").last().innerText();
   const socketsBefore = state.abortedStreams;
-  await page.getByRole("button", { name: "Stop generating" }).click();
+  await page.getByRole("button", { name: "停止", exact: true }).click();
   await page.waitForTimeout(700);
   const afterText = await page.locator(".nexq-prose").last().innerText();
   await page.waitForTimeout(900);
@@ -551,11 +551,11 @@ try {
 
   /* ── T11: New Chat ─────────────────────────────────────────────────── */
   group("T11 · New Chat clears the transcript");
-  await page.getByRole("button", { name: "New Chat" }).click();
+  await page.getByRole("button", { name: "新问答" }).click();
   await page.waitForTimeout(400);
   check("transcript is empty", (await page.locator(".nexq-prose").count()) === 0);
-  check("empty state shown", await page.getByText("NexQ Web", { exact: true }).first().isVisible());
-  check("quick actions shown", await page.getByText("总结内容").isVisible());
+  check("empty state shown", await page.getByText("粘贴问题，直接问 AI").first().isVisible());
+  check("quick actions shown", await page.getByText("总结刚才的内容").isVisible());
   await shot("11-new-chat");
 
   /* ── T12: Settings ─────────────────────────────────────────────────── */
@@ -597,7 +597,7 @@ try {
     undefined,
     { timeout: 5000 }
   ).catch(() => {});
-  await page.getByRole("button", { name: "Stop generating" }).waitFor({ state: "hidden", timeout: 20000 });
+  await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 20000 });
   const thinkingPayload = state.requests.at(-1);
   check(
     'thinking disabled is sent as {"thinking":{"type":"disabled"}}',

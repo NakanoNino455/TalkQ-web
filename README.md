@@ -16,17 +16,17 @@
 
 </details>
 
-两个界面：
+两个区域（同一个界面，不再是两个模式）：
 
-| 界面 | 做什么 |
+| 区域 | 做什么 |
 | --- | --- |
-| **实时翻译** | 点「开始实时翻译」→ 浏览器请求麦克风权限 → 边说边出**双语字幕**（原文 + DeepSeek Flash 译文，逐句流式） |
-| **对话** | DeepSeek Flash 流式聊天：图片理解、1M 上下文、Markdown、代码复制、Regenerate |
+| **实时翻译**（主区域） | 点「开始实时翻译」→ 浏览器请求麦克风权限 → 边说边出**双语字幕**（原文 + DeepSeek Flash 译文，逐句流式） |
+| **问答**（右侧栏） | 直接粘贴问题问 DeepSeek；开启「附带最近字幕」后，回答会结合你刚听到的内容。支持图片、Markdown、代码复制、Regenerate |
 
 ```
 GitHub Pages → 浏览器打开网页 → 输入一次 DeepSeek API Key（存 localStorage）
-             → 实时翻译（麦克风 → 识别 → DeepSeek 流式翻译 → 双语字幕）
-             → 或对话（deepseek-flash 流式 · 图片理解 · 1M 上下文）
+             → 点开始实时翻译（允许麦克风）→ 边说边出双语字幕
+             → 右侧问答栏粘贴问题 → 结合刚才的字幕给出答案
 ```
 
 ---
@@ -88,6 +88,18 @@ has been blocked by CORS policy
 4. 开始说话：识别中的文字实时显示（灰色斜体），稳定后立刻流式给出**预览译文**
 5. 一句话说完 → 变成一条**双语字幕**（上：原文，下：译文，右侧显示语向与耗时）
 6. 可随时 **停止翻译**（释放麦克风）、**复制全部**、**导出 .txt**、**清空**；每条字幕还能单独重译/复制/删除
+7. 每条字幕右侧有个 <kbd>?</kbd> 图标：点一下就把那句「原文 + 译文」送进右侧问答框，接着写你的问题即可
+
+### 问答栏（就在实时翻译里面）
+
+不用切换模式，问答栏一直贴在右侧（窄屏会变成抽屉，`Ctrl/Cmd + Shift + K` 可收起/展开）：
+
+* **粘贴即问**：把任何文字粘进输入框，回车发送，答案流式出现
+* **附带最近字幕作为上下文**（默认开）：提问时自动带上最近 12 句字幕，所以可以直接问
+  「刚才那句话什么意思」「帮我把这段总结成 3 点」「这段代码有问题吗」
+* 上下文**只影响这一次请求**，不会混进你看到的对话记录里；每轮都会带上最新字幕
+* 关掉这个开关，它就是一个普通的多轮对话（同样支持图片、Markdown、代码块复制、Regenerate）
+* 左侧栏「问答记录」保存历史会话，只存在本机浏览器
 
 ### 架构（为什么必须这样）
 
@@ -128,23 +140,23 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 | 隐私 | 音频 → Google（浏览器实现）；**文字 → DeepSeek**；API Key 只在你本机 localStorage，仓库里没有也不会有 Key |
 | 费用 | 每句话一次很小的 `chat/completions` 请求。按 Flash 价格（缓存未命中约 $0.15/1M 输入）算，正常说话量每天通常是**分级美分** |
 
-快捷键：`Ctrl/Cmd + Shift + L` 切到实时翻译，`Ctrl/Cmd + Shift + O` 新对话，`Ctrl/Cmd + ,` 打开设置。
+快捷键：`Ctrl/Cmd + Shift + K` 收起/展开问答栏，`Ctrl/Cmd + Shift + O` 开新问答，`Ctrl/Cmd + ,` 打开设置。
 
 ---
 
 ## 4. 功能对照
 
-| 需求 | 实现位置 |
+| 需求 / 能力 | 实现位置 |
 | --- | --- |
 | 启动读取 `localStorage` → 无 Key 弹 API Key Modal | `src/App.tsx`（hydrate → gate）、`src/components/ApiKeyModal.tsx` |
 | Key 存储键 `nexq_deepseek_api_key` | `src/lib/storage.ts` |
 | Show / Hide Key | `ApiKeyModal` 的 `Eye / EyeOff` 切换 |
 | `POST https://api.deepseek.com/chat/completions` | `src/lib/deepseek.ts`（唯一网络出口） |
 | 模型固定 `deepseek-flash`（DeepSeek-V4.1-Flash） | `src/lib/constants.ts` |
-| 1M Context（不设 4K/8K/32K/128K 上限） | 顶部实时用量表 + 完整 history 每轮全量发送 |
+| 1M Context（不设 4K/8K/32K/128K 上限） | 顶部状态 + 完整 history 每轮全量发送 |
 | `fetch()` + `ReadableStream` SSE 流式 | `src/lib/sse.ts` + `streamChat()` |
 | 先显示 Thinking… 再逐段更新 | `MessageCard` + `ThinkingBlock`（读 `reasoning_content`） |
-| Stop generating → `AbortController.abort()` | `Composer` 的 Stop 按钮 → `chatStore.stop()` |
+| Stop 生成 → `AbortController.abort()` | `Composer` 的停止按钮 → `chatStore.stop()` |
 | 图片：按钮 / 拖拽 / `Ctrl+V` 粘贴 | `src/lib/images.ts` + `Composer` |
 | 支持 JPEG / PNG / GIF / WebP（按文件头识别） | `sniffImageMime()` |
 | 图片预览条（可删除、可多张） | `src/components/ImageStrip.tsx` |
@@ -152,11 +164,12 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 | 纯图片发送自动补提示词 | `DEFAULT_IMAGE_PROMPT`（"请详细分析这张图片…"） |
 | 截图 = 系统截图 + `Ctrl+V`（无桌面截图 API） | `imageFilesFromClipboard()` |
 | 多轮上下文（图片后续追问可见） | `buildApiMessages()` + `keepHistoryImages` |
-| `+ New Chat` → `messages = []` | `Sidebar` → `chatStore.newChat()` |
-| Regenerate / Copy | `MessageCard` 动作行 |
+| 新问答 / 重译 / 复制 / 删除 | `Sidebar`、`SegmentCard`、`MessageCard` |
 | Markdown / 代码块 + Copy | `src/components/Markdown.tsx` |
-| Settings（API Key / Model / Context / Images） | `src/components/SettingsPanel.tsx`，**无 Provider 选择器** |
+| Settings（API Key / Model / Context / Images / 翻译 / 问答栏） | `src/components/SettingsPanel.tsx`，**无 Provider 选择器** |
 | 错误分类（401/402/429/5xx/网络/超时/解析/Abort） | `src/lib/errors.ts` |
+| **麦克风权限 → 实时识别 → 双语字幕** | `src/lib/speech.ts`、`src/lib/mic.ts`、`src/stores/translateStore.ts`、`TranslateView` |
+| **问答栏带字幕上下文** | `src/components/AskPanel.tsx` + `buildTranscriptContext()` |
 
 ---
 
@@ -250,6 +263,8 @@ Browser ──fetch()──▶ https://api.deepseek.com
 | 12 | **实时翻译-方向** | 先说中文，再说一句英文 | 中文出英文、英文出中文（自动互译），也可手动固定方向 |
 | 13 | **实时翻译-停止** | 点 **停止翻译** | 立即停止识别，地址栏麦克风图标消失 |
 | 14 | **实时翻译-导出** | 点 **复制全部** / **导出** | 剪贴板得到全文，或下载 `nexq-transcript-*.txt` |
+| 15 | **问答栏-粘贴提问** | 右侧问答栏粘贴一段文字 → 回车 | 流式回答；开启「附带最近字幕」时答案会引用刚才的字幕 |
+| 16 | **问答栏-就这句提问** | 点某条字幕右侧的 <kbd>?</kbd> 图标 | 问答框自动填入「原文 + 译文」，补上问题回车即可 |
 
 > 测试 3–8、10–14 需要你自己的真实 DeepSeek API Key，测试 10–14 还需要 Chrome/Edge + 可用的麦克风。
 > 仓库里不含 Key，我也没有替你写入任何 Key。
@@ -263,8 +278,8 @@ Browser ──fetch()──▶ https://api.deepseek.com
 ```bash
 npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
-npm run verify:e2e                    # 对话：66 项断言
-npm run verify:translate              # 实时翻译：36 项断言
+npm run verify:e2e                    # 问答/对话：66 项断言
+npm run verify:translate              # 实时翻译 + 问答栏：45 项断言
 ```
 
 截图会落到 `verification/artifacts/`。
@@ -279,7 +294,8 @@ Settings 无 Provider 选择器 / Thinking 开关真的写进请求体 / 刷新�
 覆盖：麦克风授权 → 识别中文字实时显示 → 预览译文 → 整句变成双语字幕（含流式光标）→
 语向自动判定（中→英 / 英→中）→ 上下文一起发送 → Chrome 自动结束识别后自动重连 →
 单条重译 / 复制全部 / 导出 .txt / 清空 → 刷新后字幕仍在 → 402 错误显示在字幕条上 →
-**拒绝麦克风权限时给出明确指引**。
+拒绝麦克风权限时给出明确指引 → **问答栏确实嵌在翻译界面里、字幕按钮能预填问题、
+提问时请求体里带着最近字幕的上下文块、而可见对话历史里不掺入这段上下文**。
 
 也验证过：`dist-standalone/nexq-web.html` 用 `file://` 双击打开后可正常走完
 「API Key Modal → Test & Continue → 流式回答 → 代码块复制」全流程（9/9 通过）。
@@ -296,9 +312,10 @@ src/
 ├── components/
 │   ├── ApiKeyModal.tsx     # 首次使用的 Key 弹窗（Test & Continue）
 │   ├── Sidebar.tsx         # 左侧栏：模式切换 / New Chat / 会话列表 / Key 状态
-│   ├── TopBar.tsx          # DeepSeek Flash · 1M Context · Vision · 麦克风状态
+│   ├── TopBar.tsx          # 实时翻译状态 · DeepSeek Flash · 麦克风状态 · 问答栏开关
 │   ├── TranslateView.tsx   # 实时翻译主界面（开始/停止、方向、语向、导出）
-│   ├── SegmentCard.tsx     # 一条双语字幕（原文 + 流式译文 + 单条操作）
+│   ├── AskPanel.tsx        # 内嵌问答栏（粘贴提问 + 字幕上下文开关）
+│   ├── SegmentCard.tsx     # 一条双语字幕（原文 + 流式译文 + 单条操作/提问）
 │   ├── MicMeter.tsx        # 麦克风电平表（滚动条柱）
 │   ├── ChatView.tsx        # 消息列表 / 吸底滚动 / 空状态快捷操作
 │   ├── MessageCard.tsx     # 用户与 AI 消息卡（Copy / Regenerate / 错误重试）

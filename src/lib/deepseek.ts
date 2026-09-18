@@ -50,7 +50,12 @@ export interface StreamChatResult {
  * Images are only legal on `user` messages (DeepSeek returns 400 otherwise),
  * so assistant turns are always sent as plain text.
  */
-export function buildApiMessages(history: ChatMessage[], settings: AppSettings): ApiMessage[] {
+export function buildApiMessages(
+  history: ChatMessage[],
+  settings: AppSettings,
+  /** Optional transient context (e.g. the live transcript) for this request only. */
+  contextText?: string
+): ApiMessage[] {
   const usable = history.filter(
     (m) => m.role !== "system" && (m.content.trim().length > 0 || (m.images?.length ?? 0) > 0)
   );
@@ -64,6 +69,17 @@ export function buildApiMessages(history: ChatMessage[], settings: AppSettings):
   const out: ApiMessage[] = [];
   const systemPrompt = settings.systemPrompt.trim();
   if (systemPrompt) out.push({ role: "system", content: systemPrompt });
+
+  // The live transcript rides along as extra system context: it is fresh on
+  // every turn (so follow-up questions see the newest subtitles) and is never
+  // stored in the visible conversation.
+  const context = contextText?.trim();
+  if (context) {
+    out.push({
+      role: "system",
+      content: `${context}\n\n请结合上述字幕回答用户的问题；如果问题与字幕无关，就按普通问题回答。`,
+    });
+  }
 
   usable.forEach((message, index) => {
     if (message.role === "assistant") {

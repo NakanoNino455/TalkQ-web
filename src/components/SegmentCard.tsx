@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Copy, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, HelpCircle, RefreshCw, Trash2 } from "lucide-react";
 import type { TranslateSegment } from "@/types";
 import { LANG_LABELS } from "@/lib/constants";
 import { cn, copyText, formatDuration } from "@/lib/utils";
@@ -10,11 +10,14 @@ export function SegmentCard({
   index,
   onRetranslate,
   onDelete,
+  onAsk,
 }: {
   segment: TranslateSegment;
   index: number;
   onRetranslate: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Push this subtitle into the embedded Q&A panel. */
+  onAsk?: (segment: TranslateSegment) => void;
 }) {
   const [copied, setCopied] = useState<"translation" | "source" | null>(null);
   const streaming = segment.status === "streaming";
@@ -62,6 +65,13 @@ export function SegmentCard({
         )}
 
         <span className="ml-auto flex items-center gap-0.5 opacity-60 transition-opacity group-hover/seg:opacity-100">
+          {onAsk && (
+            <IconAction
+              label="就这句提问"
+              onClick={() => onAsk(segment)}
+              icon={<HelpCircle className="h-3 w-3" />}
+            />
+          )}
           <IconAction
             label={copied === "translation" ? "已复制" : "复制译文"}
             onClick={() => copy("translation")}

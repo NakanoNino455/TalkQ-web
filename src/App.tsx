@@ -1,29 +1,27 @@
 import { useEffect, useState } from "react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { ChatView } from "@/components/ChatView";
-import { Composer } from "@/components/Composer";
+import { AskPanel } from "@/components/AskPanel";
 import { Lightbox } from "@/components/Lightbox";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { Toaster } from "@/components/Toaster";
 import { TopBar } from "@/components/TopBar";
 import { TranslateView } from "@/components/TranslateView";
-import type { AppView } from "@/types";
+import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTranslateStore } from "@/stores/translateStore";
 
 /**
- * App shell.
+ * App shell — one workspace: live translation with the Q&A panel built in.
  *
  *   App start ─▶ read localStorage ─▶ key present? ─┬─ no  ─▶ API Key modal
- *                                                   └─ yes ─▶ Chat | Live Translate
+ *                                                   └─ yes ─▶ 实时翻译 + 问答栏
  */
 export default function App() {
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
   const hydrateChats = useChatStore((s) => s.hydrate);
   const hydrateTranscript = useTranslateStore((s) => s.hydrate);
-  const stopTranslate = useTranslateStore((s) => s.stop);
   const settingsHydrated = useSettingsStore((s) => s.hydrated);
   const chatsHydrated = useChatStore((s) => s.hydrated);
   const transcriptHydrated = useTranslateStore((s) => s.hydrated);
@@ -37,7 +35,7 @@ export default function App() {
   const [keyPrompt, setKeyPrompt] = useState<"first-run" | "change" | null>(null);
 
   const hydrated = settingsHydrated && chatsHydrated && transcriptHydrated;
-  const view: AppView = settings.lastView;
+  const askOpen = settings.askPanelOpen;
 
   useEffect(() => {
     hydrateSettings();
@@ -45,7 +43,7 @@ export default function App() {
     hydrateTranscript();
   }, [hydrateSettings, hydrateChats, hydrateTranscript]);
 
-  // Gate the chat UI on the presence of a stored key.
+  // Gate the UI on the presence of a stored key.
   useEffect(() => {
     if (!hydrated) return;
     if (!apiKey) {
@@ -55,18 +53,18 @@ export default function App() {
     setKeyPrompt((current) => (current === "change" ? "change" : null));
   }, [hydrated, apiKey]);
 
-  // Small global shortcuts.
+  // Shortcuts: ask panel, new question, settings.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
       if (mod && event.shiftKey && event.key.toLowerCase() === "o") {
         event.preventDefault();
-        updateSettings({ lastView: "chat" });
         newChat();
+        updateSettings({ askPanelOpen: true });
       }
-      if (mod && event.shiftKey && event.key.toLowerCase() === "l") {
+      if (mod && event.shiftKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        updateSettings({ lastView: "translate" });
+        updateSettings({ askPanelOpen: !useSettingsStore.getState().settings.askPanelOpen });
       }
       if (mod && event.key === ",") {
         event.preventDefault();
@@ -77,61 +75,55 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [newChat, updateSettings]);
 
-  const switchView = (next: AppView) => {
-    if (next === view) return;
-    // Leaving the translate surface must release the microphone.
-    if (view === "translate") stopTranslate();
-    updateSettings({ lastView: next });
-  };
-
   return (
     <div className="app-ambient relative flex h-full w-full overflow-hidden bg-background">
-      <div className="hidden h-full lg:flex">
+      {/* Sidebar: one instance, inline on lg+, drawer below that. */}
+      <div
+        className={cn(
+          "h-full",
+          sidebarOpen ? "fixed inset-y-0 left-0 z-30 flex" : "hidden lg:flex"
+        )}
+      >
         <Sidebar
-          view={view}
-          onSelectView={switchView}
           onOpenSettings={() => setSettingsOpen(true)}
+          onClose={sidebarOpen ? () => setSidebarOpen(false) : undefined}
         />
       </div>
-
       {sidebarOpen && (
-        <div className="fixed inset-0 z-30 flex lg:hidden">
-          <div
-            className="absolute inset-0 bg-background/70 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-            aria-hidden
-          />
-          <Sidebar
-            className="relative"
-            view={view}
-            onSelectView={(next) => {
-              setSidebarOpen(false);
-              switchView(next);
-            }}
-            onOpenSettings={() => {
-              setSidebarOpen(false);
-              setSettingsOpen(true);
-            }}
-            onClose={() => setSidebarOpen(false)}
-          />
-        </div>
+        <div
+          className="fixed inset-0 z-20 bg-background/70 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
       )}
 
       <main className="dash-main flex min-w-0 flex-1 flex-col">
         <TopBar
-          view={view}
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          askOpen={askOpen}
+          onToggleAsk={() => updateSettings({ askPanelOpen: !askOpen })}
         />
-        {view === "translate" ? (
-          <TranslateView />
-        ) : (
-          <>
-            <ChatView />
-            <Composer />
-          </>
-        )}
+        <TranslateView />
       </main>
+
+      {/*
+        Q&A panel: ONE mounted instance (its composer owns a document-level
+        paste listener, so rendering it twice would double-attach images).
+        Inline column at xl+, overlay drawer below that.
+      */}
+      {askOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-20 bg-background/70 backdrop-blur-sm xl:hidden"
+            onClick={() => updateSettings({ askPanelOpen: false })}
+            aria-hidden
+          />
+          <div className="fixed inset-y-0 right-0 z-30 w-full max-w-[26rem] xl:static xl:z-auto xl:h-full xl:w-[24rem] xl:max-w-none xl:shrink-0">
+            <AskPanel onClose={() => updateSettings({ askPanelOpen: false })} />
+          </div>
+        </>
+      )}
 
       <SettingsPanel
         open={settingsOpen}

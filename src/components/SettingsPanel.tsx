@@ -6,6 +6,7 @@ import {
   Cpu,
   Database,
   Gauge,
+  HelpCircle,
   Images,
   Info,
   KeyRound,
@@ -326,6 +327,26 @@ export function SettingsPanel({
             <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
               语音识别由浏览器内置能力（Web Speech API）完成，仅 Chrome / Edge 支持；
               Chrome 会把音频发送到 Google 的语音服务。发往 DeepSeek 的只有识别出的文字。
+            </p>
+          </Section>
+
+          {/* ── Embedded Q&A panel ── */}
+          <Section icon={<HelpCircle className="h-3.5 w-3.5" />} title="问答栏">
+            <Toggle
+              label="显示问答栏"
+              hint="实时翻译界面右侧的问答面板（Ctrl+Shift+K 也可切换）"
+              checked={settings.askPanelOpen}
+              onChange={(v) => updateSettings({ askPanelOpen: v })}
+            />
+            <Toggle
+              label="附带最近字幕作为上下文"
+              hint="提问时自动带上最近 12 句字幕，回答能结合你刚听到的内容"
+              checked={settings.askUseTranscriptContext}
+              onChange={(v) => updateSettings({ askUseTranscriptContext: v })}
+            />
+            <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
+              字幕按钮里还有一个 <HelpCircle className="inline h-3 w-3 align-text-bottom" /> 图标：
+              点一下就把那句话送进问答框，接着写你的问题即可。
             </p>
           </Section>
 

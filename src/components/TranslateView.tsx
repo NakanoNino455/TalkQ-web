@@ -24,6 +24,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { describeEnvironmentProblem, isSpeechRecognitionSupported } from "@/lib/speech";
+import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTranslateStore } from "@/stores/translateStore";
 import { showToast } from "@/stores/toastStore";
@@ -51,6 +52,7 @@ export function TranslateView() {
 
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const setDraft = useChatStore((s) => s.setDraft);
 
   const [elapsed, setElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -78,6 +80,21 @@ export function TranslateView() {
     useTranslateStore.setState((state) => ({
       segments: state.segments.filter((s) => s.id !== id),
     }));
+  };
+
+  /** Send one subtitle into the embedded Q&A panel and focus the input. */
+  const handleAsk = (segment: { source: string; translation: string }) => {
+    const quoted = segment.translation.trim()
+      ? `关于这句字幕：\n原文：${segment.source}\n译文：${segment.translation}\n\n我的问题：`
+      : `关于这句字幕：\n${segment.source}\n\n我的问题：`;
+    setDraft(quoted);
+    updateSettings({ askPanelOpen: true });
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLTextAreaElement>('aside[aria-label="问答"] textarea');
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
   };
 
   const statusLabel =
@@ -331,6 +348,7 @@ export function TranslateView() {
                   index={index}
                   onRetranslate={(id) => void retranslate(id)}
                   onDelete={handleDelete}
+                  onAsk={handleAsk}
                 />
               ))
             )}

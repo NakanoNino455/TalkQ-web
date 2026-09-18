@@ -36,7 +36,7 @@ interface ChatState {
   removeDraftImage: (id: string) => void;
   clearDraftImages: () => void;
 
-  send: (overrideText?: string) => Promise<void>;
+  send: (overrideText?: string, options?: { contextText?: string }) => Promise<void>;
   stop: () => void;
   regenerate: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
@@ -157,7 +157,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearDraftImages: () => set({ draftImages: [] }),
 
-  send: async (overrideText) => {
+  send: async (overrideText, options) => {
     const state = get();
     if (state.isStreaming) return;
 
@@ -207,7 +207,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     schedulePersist(updatedConversations);
 
     const history = updatedConversations.find((c) => c.id === conversationId)!.messages;
-    await runCompletion(conversationId, history, set, get);
+    await runCompletion(conversationId, history, set, get, options?.contextText);
   },
 
   stop: () => {
@@ -273,7 +273,8 @@ async function runCompletion(
   conversationId: string,
   history: ChatMessage[],
   set: SetState,
-  get: GetState
+  get: GetState,
+  contextText?: string
 ): Promise<void> {
   const { apiKey, settings } = useSettingsStore.getState();
   if (!apiKey) {
@@ -328,7 +329,7 @@ async function runCompletion(
   const controller = new AbortController();
   activeController = controller;
 
-  const apiMessages = buildApiMessages(history, settings);
+  const apiMessages = buildApiMessages(history, settings, contextText);
 
   try {
     let attempt = 0;

@@ -141,6 +141,26 @@ export function cleanTranslation(raw: string): string {
   return text.trim();
 }
 
+/**
+ * Render the most recent subtitles as a context block for the embedded Q&A
+ * panel, so a pasted question can be answered against what was just said.
+ */
+export function buildTranscriptContext(
+  segments: { source: string; translation: string }[],
+  limit = 12
+): string {
+  const usable = segments
+    .filter((s) => s.source.trim())
+    .slice(-limit)
+    .map((s) => `${s.source}${s.translation.trim() ? `\n→ ${s.translation.trim()}` : ""}`);
+  if (usable.length === 0) return "";
+
+  return [
+    "【实时翻译字幕上下文】（按时间顺序，用户刚刚听到或说出的内容；如与问题无关可忽略）",
+    ...usable.map((line, index) => `${index + 1}. ${line}`),
+  ].join("\n");
+}
+
 export async function translateText(params: TranslateParams): Promise<TranslateResult> {
   const { messages, source, target } = buildTranslateMessages(
     params.text,

@@ -51,12 +51,13 @@ export const DEFAULT_SETTINGS = {
   sendOnEnter: true,
   keepHistoryImages: true,
   imageDetail: "auto" as const,
-  lastView: "chat" as const,
   translateDirection: "auto" as const,
   speechLang: "zh-CN" as const,
   livePreview: true,
   translateQuickMode: true,
   keepTranscript: true,
+  askPanelOpen: true,
+  askUseTranscriptContext: true,
 };
 
 /* ── Live translation ────────────────────────────────────────────────── */

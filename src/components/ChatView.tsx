@@ -19,7 +19,16 @@ import { useChatStore } from "@/stores/chatStore";
 import { showToast } from "@/stores/toastStore";
 
 /** Conversation surface: message list, streaming auto-scroll, empty state. */
-export function ChatView() {
+export function ChatView({
+  variant = "full",
+  onSendOverride,
+}: {
+  /** "panel" = embedded ask sidebar next to the subtitles. */
+  variant?: "full" | "panel";
+  /** Consumed by the empty-state suggestions in panel mode. */
+  onSendOverride?: () => void;
+} = {}) {
+  const compact = variant === "panel";
   const conversations = useChatStore((s) => s.conversations);
   const activeId = useChatStore((s) => s.activeId);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -64,11 +73,16 @@ export function ChatView() {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto px-3 py-5 sm:px-6"
+        className={cn("h-full overflow-y-auto", compact ? "px-2.5 py-3" : "px-3 py-5 sm:px-6")}
       >
-        <div className="mx-auto flex w-full max-w-chat flex-col gap-5">
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-col",
+            compact ? "max-w-none gap-3.5" : "max-w-chat gap-5"
+          )}
+        >
           {messages.length === 0 ? (
-            <EmptyState onPick={setDraft} />
+            <EmptyState onPick={setDraft} compact={compact} onSendOverride={onSendOverride} />
           ) : (
             messages.map((message) => (
               <MessageCard
@@ -102,8 +116,8 @@ export function ChatView() {
 const SUGGESTIONS = [
   {
     icon: FileText,
-    title: "总结内容",
-    prompt: "请把下面这段内容总结成 5 条要点，并给出结论：\n\n",
+    title: "总结刚才的内容",
+    prompt: "请用 5 条要点总结刚才字幕里的内容，并给出结论。",
   },
   {
     icon: Code2,
@@ -122,7 +136,55 @@ const SUGGESTIONS = [
   },
 ];
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({
+  onPick,
+  compact,
+  onSendOverride,
+}: {
+  onPick: (text: string) => void;
+  compact?: boolean;
+  onSendOverride?: () => void;
+}) {
+  if (compact) {
+    return (
+      <div className="fade-in flex flex-col items-center pt-4 text-center">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(220_80%_45%)] glow-primary-strong">
+          <Sparkles className="h-5 w-5 text-primary-foreground" />
+        </div>
+        <p className="mt-2.5 text-xs font-medium text-foreground">粘贴问题，直接问 AI</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          开启上方的「附带最近字幕」，回答就会结合你刚听到的内容。
+        </p>
+
+        <div className="mt-3 grid w-full grid-cols-1 gap-1.5">
+          {SUGGESTIONS.slice(0, 3).map((item) => (
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => {
+                onPick(item.prompt);
+                if (item.title === "分析图片") {
+                  showToast("info", "粘贴一张截图", "Win + Shift + S 截图后直接 Ctrl + V。");
+                }
+              }}
+              className="group flex items-center gap-2 rounded-lg border border-border bg-card/50 px-2.5 py-2 text-left transition-colors hover:border-primary/40 hover:bg-card/80"
+            >
+              <item.icon className="h-3.5 w-3.5 shrink-0 text-primary/70 group-hover:text-primary" />
+              <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+                {item.title}
+              </span>
+            </button>
+          ))}
+        </div>
+        {onSendOverride && (
+          <p className="mt-3 text-meta text-muted-foreground/60">
+            Enter 发送 · Shift+Enter 换行
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in flex flex-col items-center pt-6 text-center sm:pt-12">
       <div className="dash-modal grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(220_80%_45%)] glow-primary-strong">

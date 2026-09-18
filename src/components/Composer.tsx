@@ -20,7 +20,16 @@ import { showToast } from "@/stores/toastStore";
  * Composer: text, image attachments (button / drag & drop / Ctrl+V paste),
  * send, and the "Stop generating" abort control.
  */
-export function Composer() {
+export function Composer({
+  variant = "full",
+  onSendOverride,
+}: {
+  /** "panel" is the embedded ask sidebar: tighter chrome, fewer hints. */
+  variant?: "full" | "panel";
+  /** When set, sending goes through the caller (so it can attach context). */
+  onSendOverride?: () => void;
+} = {}) {
+  const compact = variant === "panel";
   const draft = useChatStore((s) => s.draft);
   const setDraft = useChatStore((s) => s.setDraft);
   const draftImages = useChatStore((s) => s.draftImages);
@@ -111,11 +120,19 @@ export function Composer() {
     const wantsSend = sendOnEnter ? !event.shiftKey : event.metaKey || event.ctrlKey;
     if (!wantsSend) return;
     event.preventDefault();
-    if (canSend) void send();
+    if (!canSend) return;
+    if (onSendOverride) onSendOverride();
+    else void send();
+  };
+
+  const triggerSend = () => {
+    if (!canSend) return;
+    if (onSendOverride) onSendOverride();
+    else void send();
   };
 
   return (
-    <div className="dash-composer shrink-0 px-3 pb-4 pt-1 sm:px-6">
+    <div className={cn("dash-composer shrink-0", compact ? "px-2.5 pb-2.5 pt-1" : "px-3 pb-4 pt-1 sm:px-6")}>
       <div
         ref={containerRef}
         onDragOver={(e) => {
@@ -128,7 +145,8 @@ export function Composer() {
         }}
         onDrop={handleDrop}
         className={cn(
-          "mx-auto w-full max-w-chat rounded-2xl border border-border bg-card/70 p-2 backdrop-blur-xl transition-colors",
+          "mx-auto w-full rounded-2xl border border-border bg-card/70 p-2 backdrop-blur-xl transition-colors",
+          compact ? "max-w-none" : "max-w-chat",
           "focus-within:border-primary/40 focus-within:glow-primary",
           dragActive && "dropzone-active"
         )}
@@ -145,7 +163,9 @@ export function Composer() {
             disabled={!apiKey}
             placeholder={
               apiKey
-                ? "Message DeepSeek Flash…  (drag, paste or upload images)"
+                ? compact
+                  ? "粘贴问题，回车发送…"
+                  : "Message DeepSeek Flash…  (drag, paste or upload images)"
                 : "Add your DeepSeek API key to start chatting"
             }
             className={cn(
@@ -191,42 +211,48 @@ export function Composer() {
             )}
           </Button>
 
-          <span className="hidden items-center gap-1.5 text-meta text-muted-foreground/70 sm:flex">
-            <ShieldCheck className="h-3 w-3" />
-            key stays in this browser
-          </span>
+          {!compact && (
+            <span className="hidden items-center gap-1.5 text-meta text-muted-foreground/70 sm:flex">
+              <ShieldCheck className="h-3 w-3" />
+              key stays in this browser
+            </span>
+          )}
 
           <div className="flex-1" />
 
-          <span className="hidden items-center gap-1 text-meta text-muted-foreground/60 md:flex">
-            <CornerDownLeft className="h-3 w-3" />
-            {sendOnEnter ? "Enter to send · Shift+Enter newline" : "Ctrl+Enter to send"}
-          </span>
+          {!compact && (
+            <span className="hidden items-center gap-1 text-meta text-muted-foreground/60 md:flex">
+              <CornerDownLeft className="h-3 w-3" />
+              {sendOnEnter ? "Enter to send · Shift+Enter newline" : "Ctrl+Enter to send"}
+            </span>
+          )}
 
           {isStreaming ? (
             <Button variant="destructive" size="md" onClick={stop} className="gap-2">
               <Square className="h-3.5 w-3.5" />
-              Stop generating
+              {compact ? "停止" : "Stop generating"}
             </Button>
           ) : (
             <Button
               variant="primary"
               size="md"
-              onClick={() => void send()}
+              onClick={triggerSend}
               disabled={!canSend}
               className="gap-2"
             >
               <SendHorizontal className="h-3.5 w-3.5" />
-              Send
+              发送
             </Button>
           )}
         </div>
       </div>
 
-      <p className="mx-auto mt-1.5 max-w-chat px-2 text-center text-meta text-muted-foreground/60">
-        {DEEPSEEK_MODEL} · {IMAGE_LIMITS.formatLabels} up to 32 MB each · conversation history is
-        kept in full for the 1M context window
-      </p>
+      {!compact && (
+        <p className="mx-auto mt-1.5 max-w-chat px-2 text-center text-meta text-muted-foreground/60">
+          {DEEPSEEK_MODEL} · {IMAGE_LIMITS.formatLabels} up to 32 MB each · conversation history is
+          kept in full for the 1M context window
+        </p>
+      )}
     </div>
   );
 }

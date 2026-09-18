@@ -42,11 +42,6 @@ const MOCK_PORT = 8445;
 const ARTIFACTS = path.join(import.meta.dirname, "artifacts");
 mkdirSync(ARTIFACTS, { recursive: true });
 
-if (!existsSync(path.join(DIST, "index.html"))) {
-  console.error("dist/ is missing — run `npm run build` first.");
-  process.exit(2);
-}
-
 const results = [];
 let currentGroup = "";
 function group(name) {
@@ -128,11 +123,16 @@ const handler = async (req, res) => {
   const system = body?.messages?.[0]?.content ?? "";
   const isTranslation = /simultaneous interpretation/i.test(String(system));
   const lastUser = [...(body?.messages ?? [])].reverse().find((m) => m.role === "user");
+  const systemMessages = (body?.messages ?? [])
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content));
   state.requests.push({
     isTranslation,
+    isAsk: !isTranslation,
     thinking: body?.thinking ?? null,
     stream: body?.stream ?? null,
     model: body?.model,
+    systems: systemMessages,
     system: String(system).slice(-120),
     text: typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content),
     contextPairs: isTranslation ? Math.max(0, (body.messages.length - 2) / 2) : 0,
@@ -159,7 +159,10 @@ const handler = async (req, res) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   res.write(chunk({ model: "deepseek-flash", choices: [{ index: 0, delta: { role: "assistant" } }] }));
 
-  const answer = translateOf(state.requests.at(-1).text ?? "");
+  const request = state.requests.at(-1);
+  const answer = request.isTranslation
+    ? translateOf(request.text ?? "")
+    : `这是针对「${(request.text ?? "").slice(0, 12)}」的回答。`;
   const parts = answer.match(/.{1,18}/g) ?? [answer];
   for (const part of parts) {
     res.write(chunk({ model: "deepseek-flash", choices: [{ index: 0, delta: { content: part } }] }));
@@ -482,6 +485,55 @@ try {
     (e) => !/favicon|Failed to load resource|net::ERR/i.test(e)
   );
   check("no console errors", noisy.length === 0, noisy.slice(0, 2).join(" | "));
+
+  /* ── T11: Q&A panel embedded in the translate surface ─────────────── */
+  group("T12 · 问答栏嵌在实时翻译里，可带字幕上下文提问");
+  const panel = page.locator('aside[aria-label="问答"]');
+  check("ask panel is part of the translate surface", (await panel.count()) === 1);
+  check(
+    "context toggle present",
+    await panel.getByText("附带最近字幕作为上下文").first().isVisible()
+  );
+  check(
+    "context toggle reports how many subtitles ride along",
+    await panel.getByText(/已带上最近 \d+ 句/).first().isVisible().catch(() => false)
+  );
+  check("no mode switch left in the sidebar", (await page.getByText("对话", { exact: true }).count()) === 0);
+
+  // The per-subtitle ask button prefills the panel input.
+  await page.locator('button[aria-label="就这句提问"]').first().click();
+  await page.waitForTimeout(300);
+  const input = panel.locator("textarea").first();
+  const prefilled = await input.inputValue();
+  check(
+    "subtitle ask button prefills the question box",
+    prefilled.includes("关于这句字幕") && prefilled.includes("你好，这是一次实时翻译测试。"),
+    prefilled.replace(/\s+/g, " ").slice(0, 40)
+  );
+
+  const askRequestsBefore = state.requests.filter((r) => r.isAsk).length;
+  await page.keyboard.press("Enter");
+  await page.getByText("这是针对", { exact: false }).first().waitFor({ timeout: 15000 }).catch(() => {});
+  const askRequests = state.requests.filter((r) => r.isAsk);
+  check("asking sent a chat request", askRequests.length > askRequestsBefore, `${askRequests.length} ask requests`);
+  const withTranscript = askRequests.find((r) =>
+    r.systems?.some(
+      (s) => s.includes("【实时翻译字幕上下文】") && /\n\d+\. \S/.test(s) // numbered subtitle lines
+    )
+  );
+  check(
+    "question carried the recent subtitles as context",
+    Boolean(withTranscript),
+    withTranscript
+      ? `context block with ${(withTranscript.systems.find((s) => s.includes("【实时翻译"))?.match(/\n\d+\. /g) ?? []).length} subtitle line(s)`
+      : `systems=${JSON.stringify((askRequests[0]?.systems ?? []).map((s) => s.slice(0, 30)))}`
+  );
+  check(
+    "visible history stays clean (context is transient)",
+    !(await panel.locator(".nexq-prose").first().innerText()).includes("实时翻译字幕上下文")
+  );
+  check("answer rendered in the panel", (await panel.locator(".nexq-prose").count()) >= 1);
+  await page.screenshot({ path: path.join(ARTIFACTS, "t06-ask-panel.png") });
 
   /* ── T11: permission denied path ──────────────────────────────────── */
   group("T11 · denied microphone is explained, not silent");

@@ -85,8 +85,6 @@ export interface AppSettings {
 
   /* ── Live translation ────────────────────────────────────────────── */
 
-  /** Which surface the app opens on. */
-  lastView: AppView;
   /** auto = detect per segment; otherwise a fixed direction. */
   translateDirection: TranslateDirection;
   /** Recognition language used while direction is "auto" (Web Speech takes one). */
@@ -97,10 +95,16 @@ export interface AppSettings {
   translateQuickMode: boolean;
   /** Remember the transcript across reloads. */
   keepTranscript: boolean;
+
+  /* ── Embedded ask panel ──────────────────────────────────────────── */
+
+  /** The Q&A panel lives inside the live-translation surface. */
+  askPanelOpen: boolean;
+  /** Send the recent subtitles along with each question as context. */
+  askUseTranscriptContext: boolean;
 }
 
-export type AppView = "chat" | "translate";
-
+/** auto = detect the language per sentence; otherwise a fixed direction. */
 export type TranslateDirection = "auto" | "zh-en" | "en-zh";
 
 export type SpeechLanguage = "zh-CN" | "en-US" | "ja-JP" | "ko-KR";
