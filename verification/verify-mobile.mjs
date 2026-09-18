@@ -36,11 +36,6 @@ const BASE = "/nexq-web/";
 const APP_PORT = 4322;
 const MOCK_PORT = 8447;
 const ARTIFACTS = path.join(import.meta.dirname, "artifacts");
-
-if (!existsSync(path.join(DIST, "index.html"))) {
-  console.error("dist/ is missing — run `npm run build` first.");
-  process.exit(2);
-}
 mkdirSync(ARTIFACTS, { recursive: true });
 
 const PHONE = { width: 390, height: 844 };
@@ -267,16 +262,38 @@ try {
   await page.screenshot({ path: path.join(ARTIFACTS, "m02-subtitles.png") });
 
   /* ── M3: overflow menu ────────────────────────────────────────────── */
-  group("M3 · overflow menu holds the secondary actions");
+  group("M3 · overflow menu is a tappable bottom sheet");
   await page.getByRole("button", { name: "更多操作" }).click();
   await page.waitForTimeout(300);
   check("menu shows 复制全部字幕", await page.getByText("复制全部字幕").first().isVisible());
   check("menu shows 导出 .txt", await page.getByText("导出 .txt").first().isVisible());
   check("menu shows 清空字幕", await page.getByText("清空字幕").first().isVisible());
+  check("menu renders above the subtitle list (portal)", await page.evaluate(() => {
+    // The sheet must be a child of <body>, not nested inside the blurred header.
+    const dialog = document.querySelector('[role="dialog"][aria-label="更多操作"]');
+    return Boolean(dialog && dialog.parentElement === document.body);
+  }));
   await page.screenshot({ path: path.join(ARTIFACTS, "m03-menu.png") });
-  await page.keyboard.press("Escape");
-  await page.mouse.click(PHONE.width / 2, 400);
-  await page.waitForTimeout(250);
+
+  // The real regression: the item must actually receive the tap. Playwright's
+  // click hit-tests the element, so a covered button fails here.
+  let dialogRaised = false;
+  page.once("dialog", (d) => {
+    dialogRaised = true;
+    void d.dismiss(); // keep the transcript for the tests below
+  });
+  const tapped = await page
+    .getByRole("button", { name: "清空字幕" })
+    .click({ timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  check("清空字幕 is tappable through the sheet", tapped);
+  await page.waitForTimeout(500);
+  check("tapping 清空字幕 raised the confirm dialog", dialogRaised);
+  check(
+    "dismissing the confirm keeps the transcript",
+    (await page.locator('[class*="group/seg"]').count()) > 0
+  );
 
   /* ── M4: share switches to the Q&A tab and asks ───────────────────── */
   group("M4 · share jumps to the 问答 tab and sends only the English");
@@ -331,6 +348,16 @@ try {
   await page.getByRole("button", { name: /停止翻译/ }).first().click();
   await page.waitForTimeout(400);
   check("stop releases the microphone", await page.getByText("未开始").first().isVisible());
+
+  // With recognition stopped the transcript is frozen, so clearing is testable.
+  await page.getByRole("button", { name: "更多操作" }).click();
+  await page.waitForTimeout(300);
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "清空字幕" }).click();
+  await page.waitForTimeout(700);
+  check("清空字幕 really empties the transcript", (await page.locator('[class*="group/seg"]').count()) === 0);
+  check("empty state comes back after clearing", await page.getByText("点一下开始实时翻译").first().isVisible());
+  await page.screenshot({ path: path.join(ARTIFACTS, "m07-cleared.png") });
 
   /* ── M7: sidebar drawer + settings on mobile ──────────────────────── */
   group("M7 · drawer + settings are usable on a phone");
