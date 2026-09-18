@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   apiKey: "nexq_deepseek_api_key",
   settings: "nexq_settings",
   chatHistory: "nexq_chat_history",
+  transcript: "nexq_translate_transcript",
 } as const;
 
 /** Vision limits published by DeepSeek. */
@@ -50,7 +51,62 @@ export const DEFAULT_SETTINGS = {
   sendOnEnter: true,
   keepHistoryImages: true,
   imageDetail: "auto" as const,
+  lastView: "chat" as const,
+  translateDirection: "auto" as const,
+  speechLang: "zh-CN" as const,
+  livePreview: true,
+  translateQuickMode: true,
+  keepTranscript: true,
 };
+
+/* ── Live translation ────────────────────────────────────────────────── */
+
+/** Recognition languages offered by the Web Speech API (Chrome/Edge). */
+export const SPEECH_LANGUAGES = [
+  { value: "zh-CN", label: "中文（普通话）" },
+  { value: "en-US", label: "English (US)" },
+  { value: "ja-JP", label: "日本語" },
+  { value: "ko-KR", label: "한국어" },
+] as const;
+
+export const TRANSLATE_DIRECTIONS = [
+  { value: "auto", label: "自动互译", hint: "按每句话的语言自动决定方向" },
+  { value: "zh-en", label: "中文 → English", hint: "你说中文，输出英文" },
+  { value: "en-zh", label: "English → 中文", hint: "听英文，输出中文" },
+] as const;
+
+export const LANG_LABELS: Record<string, string> = {
+  zh: "中文",
+  en: "EN",
+  ja: "日本語",
+  ko: "한국어",
+  unknown: "?",
+};
+
+/**
+ * Translation system prompt. Deliberately terse: this runs once per utterance,
+ * so prompt tokens are paid on every single segment.
+ */
+export const TRANSLATE_SYSTEM_PROMPT = [
+  "You are a real-time simultaneous interpretation engine.",
+  "Translate the user's text and output ONLY the translation.",
+  "Never explain, never add quotes, never use markdown fences, never repeat the source.",
+  "Keep names, numbers, technical terms and the original tone.",
+  "If the text is already in the target language, return it unchanged.",
+].join(" ");
+
+/** How many previous segment pairs are sent as context for consistency. */
+export const TRANSLATE_CONTEXT_PAIRS = 4;
+
+/** Latency budgets for translation (snappier than chat). */
+export const TRANSLATE_FIRST_TOKEN_TIMEOUT_MS = 20_000;
+export const TRANSLATE_IDLE_TIMEOUT_MS = 30_000;
+
+/** Interim text must be stable this long before a preview translation starts. */
+export const PREVIEW_DEBOUNCE_MS = 900;
+
+/** Persisted transcript cap (keeps localStorage quota healthy). */
+export const MAX_STORED_SEGMENTS = 200;
 
 export const APP_NAME = "NexQ";
 export const APP_SUBTITLE = "NexQ Web";

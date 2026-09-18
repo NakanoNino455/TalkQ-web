@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   MessageSquare,
+  Mic,
   Plus,
   Search,
   Settings,
@@ -12,15 +13,21 @@ import {
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/Button";
 import { cn, formatRelative } from "@/lib/utils";
+import type { AppView } from "@/types";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useTranslateStore } from "@/stores/translateStore";
 
-/** Left rail: brand, New Chat, conversation history, key status. */
+/** Left rail: brand, mode switch, conversation history, key status. */
 export function Sidebar({
+  view,
+  onSelectView,
   onOpenSettings,
   onClose,
   className,
 }: {
+  view: AppView;
+  onSelectView: (view: AppView) => void;
   onOpenSettings: () => void;
   onClose?: () => void;
   className?: string;
@@ -32,6 +39,8 @@ export function Sidebar({
   const deleteChat = useChatStore((s) => s.deleteChat);
   const clearAllChats = useChatStore((s) => s.clearAllChats);
   const apiKey = useSettingsStore((s) => s.apiKey);
+  const translateStatus = useTranslateStore((s) => s.status);
+  const translateSegments = useTranslateStore((s) => s.segments.length);
 
   const [filter, setFilter] = useState("");
 
@@ -71,113 +80,153 @@ export function Sidebar({
       </div>
 
       <div className="px-3.5">
-        <Button
-          variant="primary"
-          size="md"
-          className="w-full justify-start gap-2"
-          onClick={newChat}
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </Button>
-      </div>
-
-      <div className="mt-3 px-3.5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Search chats"
-            className="h-8 w-full rounded-md border border-border bg-background/60 pl-8 pr-2 text-[11px] text-foreground placeholder:text-muted-foreground/70 focus:border-primary/50 focus:outline-none"
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-background/50 p-0.5">
+          <ModeButton
+            active={view === "chat"}
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+            label="对话"
+            onClick={() => onSelectView("chat")}
+          />
+          <ModeButton
+            active={view === "translate"}
+            icon={<Mic className="h-3.5 w-3.5" />}
+            label="实时翻译"
+            live={translateStatus === "listening"}
+            onClick={() => onSelectView("translate")}
           />
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between px-4">
-        <span className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
-          Chats {sorted.length > 0 && `· ${sorted.length}`}
-        </span>
-        {sorted.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Delete all chats stored in this browser?")) clearAllChats();
-            }}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-            title="Delete all chats"
-            aria-label="Delete all chats"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-
-      <nav className="mt-2 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-        {visible.length === 0 && (
-          <p className="px-2.5 py-3 text-[11px] leading-relaxed text-muted-foreground">
-            {sorted.length === 0
-              ? "No conversations yet. Your chats stay in this browser only."
-              : "No chats match that search."}
-          </p>
-        )}
-
-        {visible.map((conversation) => {
-          const isActive = conversation.id === activeId;
-          const last = conversation.messages[conversation.messages.length - 1];
-          const preview = last?.content?.replace(/\s+/g, " ").trim() || "Empty chat";
-          return (
-            <div
-              key={conversation.id}
-              className={cn(
-                "group relative flex items-center rounded-lg transition-colors",
-                isActive ? "bg-primary/10" : "hover:bg-accent/60"
-              )}
+      {view === "translate" ? (
+        <div className="mt-3 px-3.5">
+          <div className="rounded-lg border border-border bg-card/50 p-3">
+            <p className="text-meta uppercase tracking-[0.16em] text-muted-foreground">本次会话</p>
+            <p className="mt-1.5 text-xs text-foreground">
+              {translateSegments} 句字幕
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              点击主区域麦克风开始；允许权限后浏览器内置识别会实时把语音转成文字，再由 DeepSeek
+              Flash 逐句翻译。
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="mt-3 px-3.5">
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full justify-start gap-2"
+              onClick={newChat}
             >
-              {isActive && (
-                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-              )}
-              <button
-                type="button"
-                onClick={() => selectChat(conversation.id)}
-                className="min-w-0 flex-1 px-2.5 py-2 text-left"
-              >
-                <div className="flex items-center gap-1.5">
-                  <MessageSquare
-                    className={cn(
-                      "h-3 w-3 shrink-0",
-                      isActive ? "text-primary" : "text-muted-foreground"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "truncate text-xs font-medium",
-                      isActive ? "text-foreground" : "text-foreground/85"
-                    )}
-                  >
-                    {conversation.title}
-                  </span>
-                </div>
-                <div className="mt-0.5 flex items-center gap-1.5 pl-[1.15rem]">
-                  <span className="truncate text-[10px] text-muted-foreground">{preview}</span>
-                </div>
-                <div className="mt-0.5 pl-[1.15rem] text-meta text-muted-foreground/70">
-                  {formatRelative(conversation.updatedAt)} · {conversation.messages.length} msg
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => deleteChat(conversation.id)}
-                className="mr-1.5 rounded p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100"
-                title="Delete chat"
-                aria-label={`Delete ${conversation.title}`}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <Plus className="h-4 w-4" />
+              New Chat
+            </Button>
+          </div>
+
+          <div className="mt-3 px-3.5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Search chats"
+                className="h-8 w-full rounded-md border border-border bg-background/60 pl-8 pr-2 text-[11px] text-foreground placeholder:text-muted-foreground/70 focus:border-primary/50 focus:outline-none"
+              />
             </div>
-          );
-        })}
-      </nav>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between px-4">
+            <span className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
+              Chats {sorted.length > 0 && `· ${sorted.length}`}
+            </span>
+            {sorted.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Delete all chats stored in this browser?")) clearAllChats();
+                }}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                title="Delete all chats"
+                aria-label="Delete all chats"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          <nav className="mt-2 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
+            {visible.length === 0 && (
+              <p className="px-2.5 py-3 text-[11px] leading-relaxed text-muted-foreground">
+                {sorted.length === 0
+                  ? "No conversations yet. Your chats stay in this browser only."
+                  : "No chats match that search."}
+              </p>
+            )}
+
+            {visible.map((conversation) => {
+              const isActive = conversation.id === activeId;
+              const last = conversation.messages[conversation.messages.length - 1];
+              const preview = last?.content?.replace(/\s+/g, " ").trim() || "Empty chat";
+              return (
+                <div
+                  key={conversation.id}
+                  className={cn(
+                    "group relative flex items-center rounded-lg transition-colors",
+                    isActive ? "bg-primary/10" : "hover:bg-accent/60"
+                  )}
+                >
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      selectChat(conversation.id);
+                      onSelectView("chat");
+                    }}
+                    className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <MessageSquare
+                        className={cn(
+                          "h-3 w-3 shrink-0",
+                          isActive ? "text-primary" : "text-muted-foreground"
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "truncate text-xs font-medium",
+                          isActive ? "text-foreground" : "text-foreground/85"
+                        )}
+                      >
+                        {conversation.title}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 pl-[1.15rem]">
+                      <span className="truncate text-[10px] text-muted-foreground">{preview}</span>
+                    </div>
+                    <div className="mt-0.5 pl-[1.15rem] text-meta text-muted-foreground/70">
+                      {formatRelative(conversation.updatedAt)} · {conversation.messages.length} msg
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteChat(conversation.id)}
+                    className="mr-1.5 rounded p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100"
+                    title="Delete chat"
+                    aria-label={`Delete ${conversation.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </nav>
+        </>
+      )}
+
+      {view === "translate" && <div className="flex-1" />}
 
       <div className="border-t border-border px-3.5 py-3">
         <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 px-2.5 py-2">
@@ -212,5 +261,38 @@ export function Sidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+function ModeButton({
+  active,
+  icon,
+  label,
+  live,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  live?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+      {live && (
+        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-success live-ring-pulse" />
+      )}
+    </button>
   );
 }

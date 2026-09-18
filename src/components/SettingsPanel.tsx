@@ -10,6 +10,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Mic,
   PlugZap,
   Sparkles,
   Trash2,
@@ -24,7 +25,9 @@ import {
   IMAGE_LIMITS,
   MAX_OUTPUT_TOKENS_LABEL,
   MODEL_VERSION_LABEL,
+  SPEECH_LANGUAGES,
   STORAGE_KEYS,
+  TRANSLATE_DIRECTIONS,
 } from "@/lib/constants";
 import { eraseAllLocalData } from "@/lib/storage";
 import { cn, formatCompact, formatDuration } from "@/lib/utils";
@@ -251,6 +254,81 @@ export function SettingsPanel({
             </div>
           </Section>
 
+          {/* ── Live translation ── */}
+          <Section icon={<Mic className="h-3.5 w-3.5" />} title="实时翻译">
+            <div className="mt-1">
+              <label className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
+                Translation direction
+              </label>
+              <select
+                value={settings.translateDirection}
+                onChange={(e) =>
+                  updateSettings({
+                    translateDirection: e.target.value as typeof settings.translateDirection,
+                  })
+                }
+                className="mt-1.5 h-8 w-full rounded-md border border-border bg-background/60 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                {TRANSLATE_DIRECTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} — {option.hint}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-2.5">
+              <label className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
+                Recognition language
+              </label>
+              <select
+                value={settings.speechLang}
+                disabled={settings.translateDirection !== "auto"}
+                onChange={(e) =>
+                  updateSettings({ speechLang: e.target.value as typeof settings.speechLang })
+                }
+                className="mt-1.5 h-8 w-full rounded-md border border-border bg-background/60 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-60"
+              >
+                {SPEECH_LANGUAGES.map((lang) => (
+                  <option key={lang.value} value={lang.value}>
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
+              {settings.translateDirection !== "auto" && (
+                <p className="mt-1 text-meta text-muted-foreground">
+                  固定方向时识别语言会自动跟随方向。
+                </p>
+              )}
+            </div>
+
+            <div className="mt-1.5">
+              <Toggle
+                label="实时预览译文"
+                hint="说话过程中就先流式给出预览翻译（略多消耗 token）"
+                checked={settings.livePreview}
+                onChange={(v) => updateSettings({ livePreview: v })}
+              />
+              <Toggle
+                label="低延迟模式"
+                hint="翻译时关闭 DeepSeek 思考模式，首字更快"
+                checked={settings.translateQuickMode}
+                onChange={(v) => updateSettings({ translateQuickMode: v })}
+              />
+              <Toggle
+                label="保留翻译记录"
+                hint="字幕保存在本机 localStorage，刷新后仍在"
+                checked={settings.keepTranscript}
+                onChange={(v) => updateSettings({ keepTranscript: v })}
+              />
+            </div>
+
+            <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
+              语音识别由浏览器内置能力（Web Speech API）完成，仅 Chrome / Edge 支持；
+              Chrome 会把音频发送到 Google 的语音服务。发往 DeepSeek 的只有识别出的文字。
+            </p>
+          </Section>
+
           {/* ── Chat behaviour ── */}
           <Section icon={<Gauge className="h-3.5 w-3.5" />} title="Chat">
             <label className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
@@ -271,6 +349,7 @@ export function SettingsPanel({
               <li className="font-mono">{STORAGE_KEYS.apiKey}</li>
               <li className="font-mono">{STORAGE_KEYS.settings}</li>
               <li className="font-mono">{STORAGE_KEYS.chatHistory}</li>
+              <li className="font-mono">{STORAGE_KEYS.transcript}</li>
             </ul>
             <div className="mt-2.5 flex flex-wrap gap-2">
               <Button

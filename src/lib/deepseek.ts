@@ -27,6 +27,11 @@ export interface StreamChatParams {
   onContent?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
   onUsage?: (usage: TokenUsage) => void;
+  /** Override the stall watchdogs (translation uses tighter budgets). */
+  firstTokenTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  /** Ask for a final usage chunk (chat shows token counts; translation does not). */
+  includeUsage?: boolean;
 }
 
 export interface StreamChatResult {
@@ -136,7 +141,9 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
   };
 
   try {
-    armWatchdog(FIRST_TOKEN_TIMEOUT_MS);
+    const firstTokenMs = params.firstTokenTimeoutMs ?? FIRST_TOKEN_TIMEOUT_MS;
+    const idleMs = params.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
+    armWatchdog(firstTokenMs);
 
     const response = await fetch(CHAT_COMPLETIONS_URL, {
       method: "POST",
@@ -145,7 +152,7 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
         Authorization: `Bearer ${params.apiKey}`,
         Accept: "text/event-stream",
       },
-      body: JSON.stringify(buildRequestBody(params, true)),
+      body: JSON.stringify(buildRequestBody(params, true, params.includeUsage !== false)),
       signal: controller.signal,
     });
 
@@ -161,10 +168,10 @@ export async function streamChat(params: StreamChatParams): Promise<StreamChatRe
       });
     }
 
-    armWatchdog(IDLE_TIMEOUT_MS);
+    armWatchdog(idleMs);
 
     for await (const event of parseSseStream(response.body, controller.signal)) {
-      armWatchdog(IDLE_TIMEOUT_MS);
+      armWatchdog(idleMs);
 
       const data = event.data.trim();
       if (!data) continue;

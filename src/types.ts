@@ -82,6 +82,59 @@ export interface AppSettings {
   keepHistoryImages: boolean;
   /** image_url detail hint: auto | low | high | original */
   imageDetail: "auto" | "low" | "high" | "original";
+
+  /* ── Live translation ────────────────────────────────────────────── */
+
+  /** Which surface the app opens on. */
+  lastView: AppView;
+  /** auto = detect per segment; otherwise a fixed direction. */
+  translateDirection: TranslateDirection;
+  /** Recognition language used while direction is "auto" (Web Speech takes one). */
+  speechLang: SpeechLanguage;
+  /** Translate the unstable interim text too (more "live", slightly more tokens). */
+  livePreview: boolean;
+  /** Skip DeepSeek thinking for translations — much lower latency. */
+  translateQuickMode: boolean;
+  /** Remember the transcript across reloads. */
+  keepTranscript: boolean;
+}
+
+export type AppView = "chat" | "translate";
+
+export type TranslateDirection = "auto" | "zh-en" | "en-zh";
+
+export type SpeechLanguage = "zh-CN" | "en-US" | "ja-JP" | "ko-KR";
+
+export type LangCode = "zh" | "en" | "ja" | "ko" | "unknown";
+
+export type SegmentStatus = "streaming" | "complete" | "error" | "aborted";
+
+/** One recognized utterance plus its DeepSeek translation. */
+export interface TranslateSegment {
+  id: string;
+  /** Recognized speech (Web Speech API final result). */
+  source: string;
+  /** Streaming DeepSeek translation. */
+  translation: string;
+  status: SegmentStatus;
+  error?: string;
+  sourceLang: LangCode;
+  targetLang: LangCode;
+  createdAt: number;
+  durationMs?: number;
+  /** True when produced from a still-unstable interim result. */
+  preview?: boolean;
+}
+
+export type SpeechStatus = "idle" | "starting" | "listening" | "restarting" | "error";
+
+export interface SpeechErrorInfo {
+  code: string;
+  title: string;
+  detail?: string;
+  hint?: string;
+  /** Fatal errors stop the session; recoverable ones auto-restart. */
+  fatal: boolean;
 }
 
 /** OpenAI-compatible content blocks accepted by DeepSeek Chat Completions. */

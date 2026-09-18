@@ -147,6 +147,7 @@ export function clearStoredHistory(): void {
 /** Everything this app stores, for the "Erase local data" action. */
 export function eraseAllLocalData(): void {
   safeRemove(STORAGE_KEYS.chatHistory);
+  safeRemove(STORAGE_KEYS.transcript);
   safeRemove(STORAGE_KEYS.settings);
   safeRemove(STORAGE_KEYS.apiKey);
 }

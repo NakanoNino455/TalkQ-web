@@ -10,7 +10,8 @@
     "build:standalone": "npm run build && node scripts/build-standalone.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "verify:e2e": "node verification/verify-e2e.mjs"
+    "verify:e2e": "node verification/verify-e2e.mjs",
+    "verify:translate": "node verification/verify-translate.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
