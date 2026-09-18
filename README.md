@@ -10,10 +10,11 @@
 ![NexQ Web 对话界面](docs/screenshot.png)
 
 <details>
-<summary>手机端截图（底部标签：字幕 / 问答）</summary>
+<summary>手机端截图（底部标签：字幕 / 问答 / 底部操作面板）</summary>
 
-<img src="docs/screenshot-mobile-subtitles.png" width="300" alt="手机端字幕页" />
-<img src="docs/screenshot-mobile-ask.png" width="300" alt="手机端问答页" />
+<img src="docs/screenshot-mobile-subtitles.png" width="260" alt="手机端字幕页" />
+<img src="docs/screenshot-mobile-ask.png" width="260" alt="手机端问答页" />
+<img src="docs/screenshot-mobile-menu-live.png" width="260" alt="底部操作面板" />
 
 </details>
 
@@ -183,7 +184,8 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 
 * **底部标签页切「字幕 / 问答」**：手机屏幕放不下左右双栏，改成一次只显示一个整屏面板；有实时状态点与句数角标
 * **点字幕的分享按钮 → 自动跳到「问答」页并发送**（英文那半句），无缝衔接
-* **拇指友好**：主按钮 44px 高，字幕操作按钮 36×36，次要操作（复制全部 / 导出 / 清空 / 预览 / 低延迟）收进 `⋯` 菜单
+* **拇指友好**：主按钮 44px 高，字幕操作按钮 36×36，次要操作（实时预览 / 低延迟 / 复制全部 / 导出 / 清空）**从底部弹出的面板**里，每行 ~48px，带拖动条和「取消」
+  > 早期版本这里是 `⋯` 下拉菜单，但控制栏的 `backdrop-blur` 会创建层叠上下文，下拉内容在视觉上正常、实际却被后面的字幕列表盖住，**点不到「清空字幕」**。现在改成 `createPortal` 到 `<body>` 的底部面板，彻底不受任何祖先层叠上下文影响（`npm run verify:mobile` 里有一条"真的点一下并确认弹窗"的回归断言，专门盯这个）。
 * **安全区适配**：`viewport-fit=cover` + `env(safe-area-inset-*)`，不会被刘海、灵动岛或底部手势条挡住
 * **`100dvh` 动态视口**：地址栏收起/弹出、软键盘弹出时输入框不会跑到屏幕外
 * **防 iOS 聚焦缩放**：输入框字号 ≥16px
@@ -334,7 +336,9 @@ npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
 npm run verify:e2e                    # 问答/对话：66 项断言
 npm run verify:translate              # 实时翻译 + 问答栏：51 项断言
-npm run verify:mobile                 # 手机布局（390×844 触屏视口）：31 项断言
+npm run verify:mobile                 # 手机布局（390×844 触屏视口）：37 项断言
+npm run verify:live-mobile            # 线上手机实测（可传 URL 覆盖）
+npm run verify:live-mobile https://your.site/nexq-web/
 ```
 
 截图会落到 `verification/artifacts/`。
@@ -357,7 +361,8 @@ Settings 无 Provider 选择器 / Thinking 开关真的写进请求体 / 刷新�
 
 手机套件在 **390×844 触屏视口**（`isMobile` + `hasTouch`）里跑真实产物，覆盖：
 无横向溢出 → 不渲染桌面侧栏 → 底部两个标签都在视口内 → 主按钮 ≥44px →
-开始翻译后字幕 17px 字号 → 字幕操作按钮 ≥32px 且语言标签不换行 → `⋯` 菜单含复制/导出/清空 →
+开始翻译后字幕 17px 字号 → 字幕操作按钮 ≥32px 且语言标签不换行 →
+底部操作面板是 body 级 portal、**真的能点到「清空字幕」并弹出确认框**（停掉识别后确认真的清空）→
 点分享自动切到「问答」标签、只发送英文、带上字幕上下文 → 输入框整体在视口内（不被标签栏遮挡）→
 输入并发送 → 切回「字幕」会话仍在 → 停止释放麦克风 → 侧栏抽屉宽度 ≤90% 屏宽 → 设置面板无横向溢出。
 
