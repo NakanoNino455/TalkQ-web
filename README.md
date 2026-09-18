@@ -3,9 +3,9 @@
 **100% 浏览器端的实时语音翻译 + DeepSeek 对话客户端。**
 把 NexQ 的前端 UI/UX 保留下来，去掉全部桌面后端：没有 Tauri、没有 Rust、没有 Node 服务、没有 API Proxy、没有数据库。构建产物 `dist/` 是纯静态文件，直接丢到 GitHub Pages 就能用。
 
-### 🚀 线上地址：**https://nakanonino455.github.io/nexq-web/**
+### 🚀 线上地址：**https://nakanonino455.github.io/TalkQ-web/**
 
-[![Deploy to GitHub Pages](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/NakanoNino455/nexq-web/actions/workflows/deploy.yml)
+[![Deploy to GitHub Pages](https://github.com/NakanoNino455/TalkQ-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/NakanoNino455/TalkQ-web/actions/workflows/deploy.yml)
 
 ![TalkQ 界面](docs/screenshot.png)
 
@@ -44,7 +44,7 @@ GitHub Pages → 浏览器打开网页 → 输入一次 DeepSeek API Key（存 l
 
 ```bash
 npm install
-npm run dev      # 自动打开浏览器 → http://localhost:5173/nexq-web/
+npm run dev      # 自动打开浏览器 → http://localhost:5173/TalkQ-web/
 npm run build    # 产出 dist/（GitHub Pages 用）
 npm run preview  # 本地预览 dist/
 ```
@@ -56,7 +56,7 @@ npm run preview  # 本地预览 dist/
 这是 Vite 的 ES Module 应用，浏览器在 `file://` 协议下会拒绝加载外部模块，双击只会看到一片空白：
 
 ```
-Access to script at 'file:///C:/nexq-web/assets/index-xxx.js' from origin 'null'
+Access to script at 'file:///C:/TalkQ-web/assets/index-xxx.js' from origin 'null'
 has been blocked by CORS policy
 ```
 
@@ -273,11 +273,11 @@ npm run build
 `vite.config.ts` **不会**把 base 写死成 `/`：
 
 1. `VITE_BASE_PATH` 环境变量优先（用户主页仓库设为 `VITE_BASE_PATH=/`）；
-2. 否则从 `GITHUB_REPOSITORY` 推导：`owner/nexq-web` → `/nexq-web/`，`owner/owner.github.io` → `/`；
-3. 本地默认 `/nexq-web/`。
+2. 否则从 `GITHUB_REPOSITORY` 推导：`owner/TalkQ-web` → `/TalkQ-web/`，`owner/owner.github.io` → `/`；
+3. 本地默认 `/TalkQ-web/`。
 
-所以仓库名叫 `nexq-web` 时，产物引用的是 `/nexq-web/assets/...`，部署到
-`https://<user>.github.io/nexq-web/` 可直接打开。
+所以仓库名叫 `TalkQ-web` 时，产物引用的是 `/TalkQ-web/assets/...`，部署到
+`https://<user>.github.io/TalkQ-web/` 可直接打开。
 
 路由是单页应用（无 React Router、无服务端路由），刷新任何路径都会回落到 `index.html`。
 
@@ -333,7 +333,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 
 | # | 测试 | 怎么做 | 期望 |
 | --- | --- | --- | --- |
-| 1 | 开发启动 | `npm run dev` | 自动打开浏览器到 `/nexq-web/`，无报错，出现 API Key Modal |
+| 1 | 开发启动 | `npm run dev` | 自动打开浏览器到 `/TalkQ-web/`，无报错，出现 API Key Modal |
 | 2 | 无 Key | DevTools → Application → Clear localStorage → 刷新 | 再次出现 API Key Modal |
 | 3 | 真实 Key | 输入 `sk-...` → **Test & Continue** | 提示 `Connection successful` 并进入界面 |
 | 4 | 对话流式 | 发送 `你好` | 先 `Thinking…`，随后逐段出现答案，带 streaming 标记 |
@@ -372,7 +372,7 @@ npm run verify:e2e                    # 问答/对话 + 品牌/图标/键迁移�
 npm run verify:translate              # 实时翻译 + 问答栏 + 文档上传：70 项断言
 npm run verify:mobile                 # 手机布局（390×844 触屏视口）：37 项断言
 npm run verify:live-mobile            # 线上手机实测（可传 URL 覆盖）
-npm run verify:live-mobile https://your.site/nexq-web/
+npm run verify:live-mobile https://your.site/TalkQ-web/
 ```
 
 截图会落到 `verification/artifacts/`。

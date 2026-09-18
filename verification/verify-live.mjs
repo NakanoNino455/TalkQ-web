@@ -7,7 +7,6 @@
  */
 import { createServer } from "node:https";
 import path from "node:path";
-import { mkdirSync } from "node:fs";
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.
@@ -21,7 +20,7 @@ try {
   console.error("This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned");
   process.exit(2);
 }
-const LIVE_URL = "https://nakanonino455.github.io/nexq-web/";
+const LIVE_URL = "https://nakanonino455.github.io/TalkQ-web/";
 const MOCK_PORT = 8443;
 const ARTIFACTS = path.join(import.meta.dirname, "artifacts");
 mkdirSync(ARTIFACTS, { recursive: true });
@@ -74,7 +73,7 @@ const mock = createServer({ key: pems.private, cert: pems.cert }, async (req, re
   const chunk = (o) => `data: ${JSON.stringify(o)}\n\n`;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   res.write(chunk({ model: "deepseek-flash", choices: [{ index: 0, delta: { role: "assistant" } }] }));
-  for (const part of ["线上版 ", "**GitHub Pages** ", "部署成功 🎉\n\n", "```text\nhttps://nakanonino455.github.io/nexq-web/\n```\n"]) {
+  for (const part of ["线上版 ", "**GitHub Pages** ", "部署成功 🎉\n\n", "```text\nhttps://nakanonino455.github.io/TalkQ-web/\n```\n"]) {
     res.write(chunk({ model: "deepseek-flash", choices: [{ index: 0, delta: { content: part } }] }));
     await sleep(120);
   }
@@ -158,8 +157,8 @@ const assetUrls = await page.evaluate(() =>
   Array.from(document.querySelectorAll("script[src], link[href]")).map((el) => el.src || el.href)
 );
 check(
-  "assets served from the /nexq-web/ sub-path",
-  assetUrls.some((u) => u.includes("/nexq-web/assets/")),
+  "assets served from the /TalkQ-web/ sub-path",
+  assetUrls.some((u) => u.includes("/TalkQ-web/assets/")),
   assetUrls.find((u) => u.includes("/assets/")) ?? "none"
 );
 

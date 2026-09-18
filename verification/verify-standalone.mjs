@@ -15,11 +15,7 @@ try {
   ({ default: selfsigned } = await import("selfsigned"));
   ({ chromium } = await import("playwright-core"));
 } catch {
-  console.error(
-    "This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned\n" +
-      "It drives the built dist/ bundle in your installed Chrome against a local mock of\n" +
-      "https://api.deepseek.com, so no API key is required."
-  );
+  console.error("This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned");
   process.exit(2);
 }
 const PROJECT = path.resolve(import.meta.dirname, "..");

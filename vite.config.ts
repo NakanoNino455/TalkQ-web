@@ -6,19 +6,19 @@ import path from "node:path";
  * GitHub Pages base path resolution (browser-only static hosting).
  *
  * 1. `VITE_BASE_PATH` — explicit override, e.g. "/" for a user/org page.
- * 2. `GITHUB_REPOSITORY` — injected by GitHub Actions, e.g. "owner/nexq-web"
- *    becomes "/nexq-web/", while "owner/owner.github.io" becomes "/".
- * 3. Local default — "/nexq-web/", the repository this client is published under.
+ * 2. `GITHUB_REPOSITORY` — injected by GitHub Actions, e.g. "owner/TalkQ-web"
+ *    becomes "/TalkQ-web/", while "owner/owner.github.io" becomes "/".
+ * 3. Local default — "/TalkQ-web/", the repository this client is published under.
  *
  * The base is never hardcoded to "/", so a project page such as
- * https://<user>.github.io/nexq-web/ resolves every asset correctly.
+ * https://<user>.github.io/TalkQ-web/ resolves every asset correctly.
  */
 const repoName = process.env.GITHUB_REPOSITORY?.split("/")[1];
 const derivedBase = repoName
   ? repoName.toLowerCase().endsWith(".github.io")
     ? "/"
     : `/${repoName}/`
-  : "/nexq-web/";
+  : "/TalkQ-web/";
 const base = process.env.VITE_BASE_PATH ?? derivedBase;
 
 export default defineConfig({

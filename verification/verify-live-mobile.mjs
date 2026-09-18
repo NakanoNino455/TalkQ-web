@@ -7,7 +7,7 @@
  * deployed bundle — not just locally.
  *
  * Optional tooling: npm i -D playwright-core selfsigned
- * Override the target: node verify-live-mobile.mjs https://your.site/nexq-web/
+ * Override the target: node verify-live-mobile.mjs https://your.site/TalkQ-web/
  */
 import { createServer } from "node:https";
 import path from "node:path";
@@ -25,7 +25,7 @@ try {
   process.exit(2);
 }
 
-const LIVE_URL = process.argv[2] ?? "https://nakanonino455.github.io/nexq-web/";
+const LIVE_URL = process.argv[2] ?? "https://nakanonino455.github.io/TalkQ-web/";
 const LIVE_ORIGIN = new URL(LIVE_URL).origin;
 const MOCK_PORT = 8448;
 const PHONE = { width: 390, height: 844 };
