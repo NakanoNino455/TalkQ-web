@@ -6,6 +6,8 @@
  * the deployed bundle's streaming path is exercised end to end.
  */
 import { createServer } from "node:https";
+import path from "node:path";
+import { mkdirSync } from "node:fs";
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.
@@ -16,11 +18,7 @@ try {
   ({ default: selfsigned } = await import("selfsigned"));
   ({ chromium } = await import("playwright-core"));
 } catch {
-  console.error(
-    "This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned\n" +
-      "It drives the built dist/ bundle in your installed Chrome against a local mock of\n" +
-      "https://api.deepseek.com, so no API key is required."
-  );
+  console.error("This optional harness needs its dev-only tools:\n  npm i -D playwright-core selfsigned");
   process.exit(2);
 }
 const LIVE_URL = "https://nakanonino455.github.io/nexq-web/";
@@ -39,6 +37,8 @@ const pems = await selfsigned.generate([{ name: "commonName", value: "api.deepse
 });
 
 let apiRequests = 0;
+/** Every parsed request body, for assertions about what was actually sent. */
+const liveRequestBodies = [];
 let lastBody = null;
 const mock = createServer({ key: pems.private, cert: pems.cert }, async (req, res) => {
   const chunks = [];
@@ -59,6 +59,7 @@ const mock = createServer({ key: pems.private, cert: pems.cert }, async (req, re
   apiRequests += 1;
   const body = raw ? JSON.parse(raw) : null;
   lastBody = body;
+  liveRequestBodies.push(body);
   if (!body?.stream) {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(
@@ -240,8 +241,8 @@ if (livePdfChip) {
   await page.locator("textarea").last().fill("pdf 里的暗号是什么？");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await page.getByRole("button", { name: "停止", exact: true }).waitFor({ state: "hidden", timeout: 25000 });
-  const carried = state.requests.some((r) =>
-    (r.body?.messages ?? []).some((m) => String(m.content).includes(LIVE_PDF_TEXT))
+  const carried = liveRequestBodies.some((body) =>
+    (body?.messages ?? []).some((m) => String(m.content).includes(LIVE_PDF_TEXT))
   );
   check("live request carried the extracted PDF text", carried);
   await page.screenshot({ path: path.join(ARTIFACTS, "live-documents.png") });
