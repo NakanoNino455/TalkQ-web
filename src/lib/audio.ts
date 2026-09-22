@@ -183,6 +183,8 @@ export interface AnalyzerDisplay {
   speech: boolean;
   snrDb: number;
   clipping: boolean;
+  /** No analyser frames arriving (device grabbed by another app / suspended). */
+  stalled: boolean;
 }
 
 export interface AudioAnalyzerOptions {
@@ -201,10 +203,11 @@ export class AudioAnalyzer {
   private source: MediaStreamAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
   private buffer = new Float32Array(0);
-  private frame = 0;
-  private stopped = false;
+  private sampleTimer: ReturnType<typeof setInterval> | undefined;
+  private stallTimer: ReturnType<typeof setInterval> | undefined;
   private lastDisplayAt = 0;
   private lastFrame: VadFrame | null = null;
+  private stopped = false;
   private calibration: CalibrationAccumulator | null = null;
   private calibrationDistance = 0;
   readonly gate: VadGate;
@@ -251,10 +254,11 @@ export class AudioAnalyzer {
     // A suspended context (autoplay policy) still yields no frames — resume it.
     void context.resume().catch(() => {});
 
-    const tick = () => {
+    const sample = () => {
       if (this.stopped || !this.analyser) return;
       this.analyser.getFloatTimeDomainData(this.buffer as Float32Array<ArrayBuffer>);
-      const frame = this.gate.process(this.buffer, performance.now());
+      const now = performance.now();
+      const frame = this.gate.process(this.buffer, now);
       this.lastFrame = frame;
       this.options.onFrame?.(frame);
 
@@ -264,23 +268,44 @@ export class AudioAnalyzer {
         else calibration.addNoise(frame.levelDb);
       }
 
-      const displayHz = this.options.displayHz ?? 10;
-      const now = performance.now();
-      if (this.options.onDisplay && now - this.lastDisplayAt >= 1000 / displayHz) {
-        this.lastDisplayAt = now;
-        this.options.onDisplay({
-          level: Math.max(0, Math.min(1, (frame.smoothDb + 80) / 80)),
-          peak: frame.peak,
-          noiseFloor: frame.noiseFloorDb,
-          speech: frame.speech,
-          snrDb: frame.snrDb,
-          clipping: frame.peak >= 0.99,
-        });
-      }
-
-      this.frame = requestAnimationFrame(tick);
+      this.publishDisplay(frame, false);
     };
-    this.frame = requestAnimationFrame(tick);
+
+    /**
+     * Sample from a timer rather than requestAnimationFrame: rAF is throttled
+     * (or stops) when the page is not being painted — measured on the live site,
+     * that froze the VAD in its last state. 30 Hz is plenty for speech.
+     */
+    this.sampleTimer = setInterval(sample, 33);
+
+    /** If frames stop arriving, close the gate instead of showing a frozen state. */
+    this.stallTimer = setInterval(() => {
+      if (this.stopped) return;
+      const now = performance.now();
+      if (!this.gate.isStalled(now, 1200)) return;
+      this.gate.forceIdle();
+      const frame = this.lastFrame;
+      if (frame) {
+        this.lastFrame = { ...frame, speech: false, speechEnd: false, reason: "silence" };
+      }
+      this.publishDisplay(this.lastFrame, true);
+    }, 500);
+  }
+
+  private publishDisplay(frame: VadFrame | null, stalled: boolean): void {
+    if (!this.options.onDisplay) return;
+    const now = performance.now();
+    if (!stalled && now - this.lastDisplayAt < 1000 / (this.options.displayHz ?? 10)) return;
+    this.lastDisplayAt = now;
+    this.options.onDisplay({
+      level: frame ? Math.max(0, Math.min(1, (frame.smoothDb + 80) / 80)) : 0,
+      peak: frame?.peak ?? 0,
+      noiseFloor: frame?.noiseFloorDb ?? -140,
+      speech: stalled ? false : Boolean(frame?.speech),
+      snrDb: frame?.snrDb ?? 0,
+      clipping: Boolean(frame && frame.peak >= 0.99),
+      stalled,
+    });
   }
 
   setPreset(preset: "near" | "far"): void {
@@ -310,7 +335,10 @@ export class AudioAnalyzer {
 
   stop(): void {
     this.stopped = true;
-    cancelAnimationFrame(this.frame);
+    if (this.sampleTimer) clearInterval(this.sampleTimer);
+    if (this.stallTimer) clearInterval(this.stallTimer);
+    this.sampleTimer = undefined;
+    this.stallTimer = undefined;
     try {
       this.source?.disconnect();
       this.analyser?.disconnect();

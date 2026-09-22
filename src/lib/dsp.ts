@@ -231,6 +231,8 @@ export class VadGate {
   private active = false;
   private smoothDb: number | null = null;
   private now = 0;
+  /** When the last frame was processed (for stall detection). */
+  private lastFrameAt = 0;
 
 
   constructor(preset: "near" | "far" = "near") {
@@ -270,6 +272,7 @@ export class VadGate {
     const zcr = computeZeroCrossingRate(frame);
     const levelDb = toDbfs(rms);
     this.now = nowMs;
+    this.lastFrameAt = nowMs;
 
     // Smoothing stabilises the decision against per-frame noise (far-field
     // signals are only a few dB above the room, so raw frames flicker).
@@ -346,6 +349,31 @@ export class VadGate {
   /** Milliseconds since the last frame that looked like speech. */
   silenceSinceLastSpeech(): number {
     return this.lastSpeechAt ? Math.max(0, this.now - this.lastSpeechAt) : Number.POSITIVE_INFINITY;
+  }
+
+  /**
+   * True when no audio frame has arrived for a while.
+   *
+   * Measured on the live site: when the analyser stops producing frames (device
+   * grabbed by another app, suspended AudioContext, throttled page) the gate kept
+   * its last state, so `speech: true` stayed on screen forever and the
+   * "we hear you but nothing is recognised" hint never cleared. A stalled
+   * analyser must read as "no speech", not as an endless utterance.
+   */
+  isStalled(nowMs: number, thresholdMs = 1200): boolean {
+    return this.lastFrameAt > 0 && nowMs - this.lastFrameAt > thresholdMs;
+  }
+
+  /** Close the gate without a frame (used when frames stop arriving). */
+  forceIdle(): void {
+    if (!this.active && this.attackCount === 0) return;
+    this.active = false;
+    this.attackCount = 0;
+  }
+
+  /** Last time a frame was processed (ms, performance clock). */
+  get lastFrameTime(): number {
+    return this.lastFrameAt;
   }
 }
 

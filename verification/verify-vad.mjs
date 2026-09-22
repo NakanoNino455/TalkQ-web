@@ -200,6 +200,21 @@ section("VAD · close voice and clipping");
   check("clipping is reported even during warm-up", clipped.some((f) => f.reason === "clipping"));
 }
 
+section("VAD · a stalled analyser must not report speech forever");
+{
+  // Measured on the live site: when frames stop arriving the gate froze in its
+  // last state, so "speech: true" stayed on screen indefinitely.
+  const gate = new VadGate("far");
+  feed(gate, repeat(15, (i) => noiseFrame(0.004, i + 1)));
+  const speech = feed(gate, repeat(20, (i) => mixedFrame(0.004, 0.01, 7, i * FRAME)), 15 * 21);
+  check("speech is active while frames flow", speech.at(-1).speech);
+  const lastFrameAt = 15 * 21 + 19 * 21;
+  check("not stalled while frames arrive", gate.isStalled(lastFrameAt + 200, 1200) === false);
+  check("stalled after 2 s without frames", gate.isStalled(lastFrameAt + 2000, 1200) === true);
+  gate.forceIdle();
+  check("forceIdle clears the frozen speech state", gate.isSpeech === false);
+}
+
 section("VAD · a short pause must not end the utterance (the 5 m killer)");
 {
   const gate = new VadGate("far");

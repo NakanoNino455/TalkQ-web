@@ -14,8 +14,13 @@ const RESTART_WINDOW_MS = 60_000;
 const RESTART_SOFT_LIMIT = 20;
 /** Backoff ladder, used only after errors; a normal end restarts immediately. */
 const RESTART_BACKOFF_MS = [0, 60, 200, 500, 1000, 2000];
-/** audio-capture is retried this many times before the session is abandoned. */
-const RECOVERABLE_CAPTURE_RETRIES = 4;
+/**
+ * audio-capture (the recognizer cannot open the input) is retried this many
+ * times, with the backoff ladder above stretching each attempt out to ~2-5 s.
+ * Measured on the live site: 4 attempts inside a second gave up long before a
+ * device that was merely busy could recover.
+ */
+const RECOVERABLE_CAPTURE_RETRIES = 8;
 
 /**
  * Web Speech API wrapper (Chrome / Edge).
@@ -586,6 +591,8 @@ export class LiveRecognizer {
     // Immediate restart while someone is talking; small backoff after errors.
     const step = this.consecutiveErrors === 0 ? 0 : Math.min(this.consecutiveErrors, RESTART_BACKOFF_MS.length - 1);
     let delay = RESTART_BACKOFF_MS[step];
+    // Device-open failures get progressively longer waits instead of a burst.
+    if (reason === "audio-capture") delay = Math.max(delay, Math.min(500 * this.captureRetries, 5000));
     if (overBudget) delay = Math.max(delay, 1500);
     if (speechActive && this.consecutiveErrors === 0) delay = 0;
 

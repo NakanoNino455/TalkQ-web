@@ -341,9 +341,16 @@ export function TranslateView() {
         </Banner>
       )}
 
+      {/* Analyser stalled: no audio frames at all (device grabbed elsewhere). */}
+      {!error && analysis?.stalled && (
+        <Banner tone="warning" icon={<MicOff className="h-3.5 w-3.5" />} title="收不到音频帧">
+          麦克风没有再送音频数据（可能被其他程序占用，或设备已断开）。请检查输入设备，或重新开始翻译。
+        </Banner>
+      )}
+
       {/* Weak signal: the VAD hears a voice but recognition returns nothing —
           this is the honest "it is physics, not software" signal. */}
-      {!error && unrecognisedSpeechMs > 2500 && (
+      {!error && !analysis?.stalled && unrecognisedSpeechMs > 2500 && (
         <Banner tone="warning" icon={<RadioTower className="h-3.5 w-3.5" />} title="听到人声，但识别没有输出">
           已经检测到 {Math.round(unrecognisedSpeechMs / 1000)} 秒人声却没有文字返回，说明信噪比太低：
           当前 SNR {vad ? `${vad.snrDb.toFixed(0)} dB` : "未知"}（建议 ≥ 12 dB）。
