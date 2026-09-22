@@ -870,7 +870,7 @@ try {
   const deniedText = await deniedPage.locator("body").innerText();
   check(
     "microphone denial explained",
-    /Microphone permission denied|Microphone unavailable/i.test(deniedText),
+    /麦克风权限被拒绝|麦克风不可用|Microphone permission denied|Microphone unavailable/i.test(deniedText),
     deniedText.match(/Microphone[^\n]*/)?.[0] ?? "no message"
   );
   await deniedPage.screenshot({ path: path.join(ARTIFACTS, "t05-mic-denied.png") });

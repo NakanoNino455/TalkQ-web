@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   Brain,
   CheckCircle2,
@@ -12,13 +13,16 @@ import {
   KeyRound,
   Loader2,
   Mic,
+  MicVocal,
   PlugZap,
+  RotateCcw,
   Share2,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import {
   CONTEXT_WINDOW_LABEL,
   CONTEXT_WINDOW_TOKENS,
@@ -31,10 +35,12 @@ import {
   STORAGE_KEYS,
   TRANSLATE_DIRECTIONS,
 } from "@/lib/constants";
+import { listAudioInputs } from "@/lib/audio";
 import { eraseAllLocalData } from "@/lib/storage";
 import { cn, formatCompact, formatDuration } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useTranslateStore } from "@/stores/translateStore";
 import { showToast } from "@/stores/toastStore";
 
 function maskKey(key: string): string {
@@ -62,6 +68,25 @@ export function SettingsPanel({
   const clearApiKey = useSettingsStore((s) => s.clearApiKey);
   const resetSettings = useSettingsStore((s) => s.resetSettings);
   const clearAllChats = useChatStore((s) => s.clearAllChats);
+
+  const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([]);
+  const applyAudioSettings = useTranslateStore((s) => s.applyAudioSettings);
+  const translateStatus = useTranslateStore((s) => s.status);
+  const diagnosticsActive =
+    translateStatus === "listening" || translateStatus === "restarting" || translateStatus === "starting";
+
+  const refreshDevices = async () => {
+    try {
+      setDevices(await listAudioInputs());
+    } catch {
+      setDevices([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshDevices();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -256,6 +281,74 @@ export function SettingsPanel({
             </div>
           </Section>
 
+          {/* ── Microphone / far-field ── */}
+          <Section icon={<MicVocal className="h-3.5 w-3.5" />} title="麦克风 / 远场">
+            <Toggle
+              label="远场模式（5 米级）"
+              hint="请求原始采集（关掉浏览器降噪/自动增益）、更灵敏的 VAD、更长的停顿容忍，并让识别在意外结束后立刻重连"
+              checked={settings.farFieldMode}
+              onChange={(v) => updateSettings({ farFieldMode: v })}
+            />
+
+            <div className="mt-2.5">
+              <label className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
+                音频处理
+              </label>
+              <select
+                value={settings.micProcessing}
+                onChange={(e) =>
+                  updateSettings({ micProcessing: e.target.value as typeof settings.micProcessing })
+                }
+                className="mt-1.5 h-8 w-full rounded-md border border-border bg-background/60 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                <option value="auto">自动（远场=关闭降噪/AGC，近场=开启）</option>
+                <option value="browser">强制开启浏览器降噪 / 回声消除 / 自动增益</option>
+                <option value="raw">强制原始采集（全部关闭）</option>
+              </select>
+              <p className="mt-1 text-meta leading-relaxed text-muted-foreground">
+                浏览器这三项是按「贴嘴说话」调优的：远场时自动增益会把房间噪声一起抬起来、降噪会把远处的轻声直接掐掉，
+                所以远场默认请求原始采集。改完可以用下面的 SNR 数字自己对比。
+              </p>
+            </div>
+
+            <div className="mt-2.5">
+              <label className="text-meta uppercase tracking-[0.16em] text-muted-foreground">
+                输入设备
+              </label>
+              <select
+                value={settings.micDeviceId}
+                onChange={(e) => updateSettings({ micDeviceId: e.target.value })}
+                onFocus={() => void refreshDevices()}
+                className="mt-1.5 h-8 w-full rounded-md border border-border bg-background/60 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                <option value="">系统默认</option>
+                {devices.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-meta leading-relaxed text-muted-foreground">
+                远场建议选外接麦克风或会议麦；用了阵列/USB 麦时设备名会显示在这里。
+              </p>
+            </div>
+
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => void applyAudioSettings()}
+              >
+                <RotateCcw className="h-3 w-3" />
+                立即应用（不中断识别）
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => void refreshDevices()}>
+                刷新设备列表
+              </Button>
+            </div>
+          </Section>
+
           {/* ── Live translation ── */}
           <Section icon={<Mic className="h-3.5 w-3.5" />} title="实时翻译">
             <div className="mt-1">
@@ -421,6 +514,11 @@ export function SettingsPanel({
                 Erase local data
               </Button>
             </div>
+          </Section>
+
+          {/* ── Developer diagnostics ── */}
+          <Section icon={<Activity className="h-3.5 w-3.5" />} title="开发者诊断（远场调试）">
+            <DiagnosticsPanel active={diagnosticsActive} />
           </Section>
 
           {/* ── About ── */}

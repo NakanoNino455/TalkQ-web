@@ -119,6 +119,18 @@ export interface AppSettings {
   /** Remember the transcript across reloads. */
   keepTranscript: boolean;
 
+  /* ── Microphone / far-field capture ──────────────────────────────── */
+
+  /**
+   * Far-field mode: raw capture (no browser NS/AGC), a more sensitive VAD and a
+   * longer pause tolerance — aimed at speakers several metres away.
+   */
+  farFieldMode: boolean;
+  /** auto = raw in far-field mode; browser = force EC/NS/AGC on; raw = force off. */
+  micProcessing: "auto" | "browser" | "raw";
+  /** Preferred input device ("" = system default). */
+  micDeviceId: string;
+
   /* ── Embedded ask panel ──────────────────────────────────────────── */
 
   /** The Q&A panel lives inside the live-translation surface. */

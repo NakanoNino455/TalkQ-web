@@ -7,6 +7,7 @@
  */
 import { createServer } from "node:https";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
  * The app itself never depends on these.

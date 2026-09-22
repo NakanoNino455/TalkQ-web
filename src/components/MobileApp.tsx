@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Mic,
   MicOff,
+  RadioTower,
   RefreshCw,
   ShieldAlert,
   Square,
@@ -140,6 +141,10 @@ function MobileTranslatePane() {
   const segments = useTranslateStore((s) => s.segments);
   const error = useTranslateStore((s) => s.error);
   const micLevel = useTranslateStore((s) => s.micLevel);
+  const vad = useTranslateStore((s) => s.vad);  const warning = useTranslateStore((s) => s.warning);
+  const clearWarning = useTranslateStore((s) => s.clearWarning);
+  const unrecognisedSpeechMs = useTranslateStore((s) => s.unrecognisedSpeechMs);
+  const refreshDiagnostics = useTranslateStore((s) => s.refreshDiagnostics);
   const startedAt = useTranslateStore((s) => s.startedAt);
   const toggle = useTranslateStore((s) => s.toggle);
   const clear = useTranslateStore((s) => s.clear);
@@ -172,6 +177,12 @@ function MobileTranslatePane() {
     if (!pinned || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [segments, interim, pinned]);
+
+  useEffect(() => {
+    if (!listening) return;
+    const id = setInterval(refreshDiagnostics, 500);
+    return () => clearInterval(id);
+  }, [listening, refreshDiagnostics]);
 
   const handleShare = (segment: { source: string; translation: string; sourceLang: string; targetLang: string }) => {
     const english = englishSideOf(segment as never).text.trim();
@@ -339,6 +350,33 @@ function MobileTranslatePane() {
       {environmentProblem && (
         <MobileBanner tone="warning" icon={<ShieldAlert className="h-4 w-4" />} title={environmentProblem.title}>
           {environmentProblem.detail}
+        </MobileBanner>
+      )}
+
+      {!error && unrecognisedSpeechMs > 2500 && (
+        <MobileBanner
+          tone="warning"
+          icon={<RadioTower className="h-4 w-4" />}
+          title="听到人声，但识别没有输出"
+        >
+          已检测到 {Math.round(unrecognisedSpeechMs / 1000)} 秒人声却没有文字返回，信噪比太低（当前 SNR{" "}
+          {vad ? `${vad.snrDb.toFixed(0)} dB` : "未知"}）。
+          把手机挪近说话人，或外接麦克风；设置 → 开发者诊断里有距离校准。
+        </MobileBanner>
+      )}
+
+      {!error && warning && (
+        <MobileBanner
+          tone="warning"
+          icon={<RefreshCw className="h-4 w-4" />}
+          title="识别已自动恢复"
+          action={
+            <Button variant="ghost" size="sm" onClick={clearWarning}>
+              知道了
+            </Button>
+          }
+        >
+          {warning}
         </MobileBanner>
       )}
       {error && !environmentProblem && (

@@ -10,8 +10,21 @@ import {
   STORAGE_KEYS,
 } from "@/lib/constants";
 import { DeepSeekError, toDeepSeekError } from "@/lib/errors";
-import { describeMicError, requestMicrophone, startLevelMeter, stopMicrophone, type LevelMeterHandle } from "@/lib/mic";
-import { LiveRecognizer, describeEnvironmentProblem } from "@/lib/speech";
+import {
+  AudioAnalyzer,
+  applyProcessing,
+  requestMicrophone,
+  stopMicrophone,
+  toMicError,
+  type AnalyzerDisplay,
+  type MicCaptureReport,
+} from "@/lib/audio";
+import type { CalibrationSample, VadFrame } from "@/lib/dsp";
+import {
+  LiveRecognizer,
+  describeEnvironmentProblem,
+  type RecognizerDiagnostics,
+} from "@/lib/speech";
 import { detectLanguage, resolveDirection, translateText } from "@/lib/translate";
 import { uid } from "@/lib/utils";
 import { useSettingsStore } from "./settingsStore";
@@ -27,6 +40,22 @@ import { showToast } from "./toastStore";
  * time keeps latency predictable and avoids tripping DeepSeek's rate limits
  * when someone talks continuously.
  */
+
+export type VadSummary = Pick<
+  VadFrame,
+  | "speech"
+  | "levelDb"
+  | "smoothDb"
+  | "noiseFloorDb"
+  | "snrDb"
+  | "peak"
+  | "zcr"
+  | "reason"
+  | "speechMs"
+  | "silenceMs"
+  | "tooWeak"
+  | "warmup"
+>;
 
 interface PersistedTranscript {
   segments: TranslateSegment[];
@@ -44,7 +73,19 @@ interface TranslateState {
   interimTargetLang: string;
   segments: TranslateSegment[];
   error: SpeechErrorInfo | null;
+  /** Non-fatal warning (network blip, weak signal…) shown as a banner. */
+  warning: string | null;
   micLevel: number;
+  /** Live analysis for the meter and the diagnostics panel. */
+  analysis: AnalyzerDisplay | null;
+  /** What the device actually gave us (constraints + real settings). */
+  capture: MicCaptureReport | null;
+  /** Recognizer lifecycle counters (restarts, gaps, last partial/final…). */
+  recognition: RecognizerDiagnostics | null;
+  /** Latest VAD frame summary for the diagnostics panel. */
+  vad: VadSummary | null;
+  /** Speech seen by the VAD but no recognition result for this long → hint. */
+  unrecognisedSpeechMs: number;
   startedAt: number | null;
   hydrated: boolean;
 
@@ -54,6 +95,18 @@ interface TranslateState {
   toggle: () => Promise<void>;
   clear: () => void;
   setLanguage: (lang: string) => void;
+  /** Re-read the far-field settings and apply them to the live capture. */
+  applyAudioSettings: () => Promise<void>;
+  clearWarning: () => void;
+
+  /* ── Distance calibration (developer diagnostics) ─────────────────── */
+  calibrating: boolean;
+  calibrationDistance: number;
+  startCalibration: (distanceM: number) => void;
+  finishCalibration: () => CalibrationSample | null;
+
+  /** Pull the live recognizer/VAD numbers into React state (diagnostics panel). */
+  refreshDiagnostics: () => void;
   retranslate: (segmentId: string) => Promise<void>;
   copyAll: () => Promise<boolean>;
   exportTranscript: () => string;
@@ -66,7 +119,13 @@ interface TranslateState {
 
 let recognizer: LiveRecognizer | null = null;
 let micStream: MediaStream | null = null;
-let meter: LevelMeterHandle | null = null;
+let analyzer: AudioAnalyzer | null = null;
+let activeAnalyzer: AudioAnalyzer | null = null;
+/** Live VAD state, read by the recognizer when deciding how fast to restart. */
+let vadSpeechActive = false;
+let speechSince: number | null = null;
+let unrecognisedSince: number | null = null;
+let lastUnrecognisedWarn = 0;
 let previewController: AbortController | null = null;
 let activeController: AbortController | null = null;
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
@@ -118,7 +177,13 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
   interimTargetLang: "unknown",
   segments: [],
   error: null,
+  warning: null,
   micLevel: 0,
+  analysis: null,
+  capture: null,
+  recognition: null,
+  vad: null,
+  unrecognisedSpeechMs: 0,
   startedAt: null,
   hydrated: false,
 
@@ -152,24 +217,60 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
       return;
     }
 
-    set({ status: "starting", error: null });
+    set({ status: "starting", error: null, warning: null });
 
     // 1) Ask for the microphone — this is what raises the browser prompt.
+    //    Far-field mode requests a raw capture (see src/lib/audio.ts).
+    const micOptions = {
+      farField: settings.farFieldMode,
+      processing: settings.micProcessing,
+      deviceId: settings.micDeviceId || undefined,
+    };
+    let captureReport: MicCaptureReport | null = null;
     try {
-      micStream = await requestMicrophone();
+      const result = await requestMicrophone(micOptions);
+      micStream = result.stream;
+      captureReport = result.report;
     } catch (err) {
-      const info = describeMicError(err);
+      const error = toMicError(err);
       set({
         status: "error",
-        error: { code: "microphone", title: info.title, detail: info.detail, hint: info.hint, fatal: info.fatal },
+        error: { code: "microphone", title: error.message, detail: error.detail, hint: error.hint, fatal: true },
       });
-      showToast("error", info.title, info.detail);
+      showToast("error", error.message, error.detail);
       return;
     }
 
-    meter = startLevelMeter(micStream, (level) => set({ micLevel: level }));
+    // 2) Analyse the same microphone: RMS/peak/noise floor/SNR + VAD. This is
+    //    what tells the user whether a distant voice is arriving at all.
+    analyzer = new AudioAnalyzer(micStream, {
+      preset: settings.farFieldMode ? "far" : "near",
+      onFrame: (frame) => {
+        vadSpeechActive = frame.speech;
+        // Speech is present but recognition has produced nothing for a while —
+        // the signature of a signal that is too weak for the cloud recognizer.
+        if (frame.speech) {
+          if (speechSince === null) speechSince = performance.now();
+          unrecognisedSince ??= performance.now();
+        } else {
+          speechSince = null;
+          unrecognisedSince = null;
+        }
+        const unrecognised =
+          speechSince !== null && unrecognisedSince !== null
+            ? performance.now() - unrecognisedSince
+            : 0;
+        if (unrecognised > 2500 && unrecognised - lastUnrecognisedWarn > 8000) {
+          lastUnrecognisedWarn = unrecognised;
+          set({ unrecognisedSpeechMs: Math.round(unrecognised) });
+        }
+      },
+      onDisplay: (display) => set({ analysis: display, micLevel: display.level }),
+    });
+    analyzer.start();
+    activeAnalyzer = analyzer;
 
-    // 2) Start recognition in the configured language.
+    // 3) Start recognition in the configured language.
     const recognitionLang =
       settings.translateDirection === "zh-en"
         ? "zh-CN"
@@ -180,23 +281,44 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
     recognizer = new LiveRecognizer(
       {
         onInterim: (text) => get().pushInterim(text),
-        onFinal: (text) => get().pushFinal(text),
+        onFinal: (text) => {
+          speechSince = null;
+          unrecognisedSince = null;
+          set({ unrecognisedSpeechMs: 0 });
+          get().pushFinal(text);
+        },
         onStatus: (status) => set({ status }),
         onError: (error) => {
-          set({ error });
           if (error.fatal) {
+            set({ error });
             stopMicrophone(micStream);
             micStream = null;
-            meter?.stop();
-            meter = null;
+            analyzer?.stop();
+            analyzer = null;
             showToast("error", error.title, error.detail);
+            return;
+          }
+          // Recoverable (network blip, no-speech, aborted): warn, keep going.
+          set({ warning: `${error.title}${error.detail ? ` · ${error.detail}` : ""}` });
+        },
+        onRestart: ({ count, reason }) => {
+          if (reason === "network" && count % 3 === 0) {
+            set({ warning: "语音服务连接不稳定，正在自动重连…" });
           }
         },
+        // The VAD tells the restarter whether someone is mid-sentence, so a
+        // restart can be immediate instead of waiting out a fixed delay.
+        isSpeechActive: () => vadSpeechActive,
       },
       recognitionLang
     );
 
-    set({ startedAt: Date.now() });
+    set({
+      startedAt: Date.now(),
+      capture: captureReport,
+      vad: null,
+      unrecognisedSpeechMs: 0,
+    });
     recognizer.start(recognitionLang);
   },
 
@@ -205,8 +327,13 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
     recognizer = null;
     stopMicrophone(micStream);
     micStream = null;
-    meter?.stop();
-    meter = null;
+    analyzer?.stop();
+    analyzer = null;
+    activeAnalyzer = null;
+    vadSpeechActive = false;
+    speechSince = null;
+    unrecognisedSince = null;
+    lastUnrecognisedWarn = 0;
     previewController?.abort();
     previewController = null;
     activeController?.abort();
@@ -214,7 +341,72 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
     queue = [];
     if (previewTimer) clearTimeout(previewTimer);
     previewTimer = undefined;
-    set({ status: "idle", interim: "", interimTranslation: "", micLevel: 0 });
+    set({
+      status: "idle",
+      interim: "",
+      interimTranslation: "",
+      micLevel: 0,
+      analysis: null,
+      vad: null,
+      unrecognisedSpeechMs: 0,
+    });
+  },
+
+  /** Apply far-field / processing / device changes to the running capture. */
+  applyAudioSettings: async () => {
+    const { settings } = useSettingsStore.getState();
+    if (!micStream || !analyzer) return;
+    const preset = settings.farFieldMode ? "far" : "near";
+    analyzer.setPreset(preset);
+    const report = await applyProcessing(micStream, {
+      farField: settings.farFieldMode,
+      processing: settings.micProcessing,
+      deviceId: settings.micDeviceId || undefined,
+    });
+    set({ capture: report });
+  },
+
+  clearWarning: () => set({ warning: null }),
+
+  calibrating: false,
+  calibrationDistance: 1,
+
+  startCalibration: (distanceM) => {
+    if (!activeAnalyzer) {
+      showToast("error", "先开始实时翻译", "校准需要麦克风处于开启状态。");
+      return;
+    }
+    activeAnalyzer.startCalibration(distanceM);
+    set({ calibrating: true, calibrationDistance: distanceM });
+  },
+
+  finishCalibration: () => {
+    const sample = activeAnalyzer?.finishCalibration() ?? null;
+    set({ calibrating: false });
+    return sample;
+  },
+
+  refreshDiagnostics: () => {
+    const frame = activeAnalyzer?.latestFrame ?? null;
+    set({
+      recognition: recognizer?.getDiagnostics() ?? null,
+      vad: frame
+        ? {
+            speech: frame.speech,
+            levelDb: frame.levelDb,
+            smoothDb: frame.smoothDb,
+            noiseFloorDb: frame.noiseFloorDb,
+            snrDb: frame.snrDb,
+            peak: frame.peak,
+            zcr: frame.zcr,
+            reason: frame.reason,
+            speechMs: frame.speechMs,
+            silenceMs: frame.silenceMs,
+            tooWeak: frame.tooWeak,
+            warmup: frame.warmup,
+          }
+        : null,
+    });
   },
 
   toggle: async () => {

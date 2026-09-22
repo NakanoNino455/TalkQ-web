@@ -1,4 +1,21 @@
 import type { SpeechErrorInfo, SpeechStatus } from "@/types";
+import { mergeTranscripts } from "./dsp";
+
+/**
+ * Restart policy — these numbers are the heart of the far-field fix.
+ *
+ * The previous version waited a fixed 350 ms before every automatic restart
+ * (a 350 ms hole in the audio each time Chrome ended the session) and treated
+ * "12 restarts in a minute" as a fatal failure, which a normal quiet room
+ * reaches easily — that is why live translation kept switching itself off.
+ */
+const RESTART_WINDOW_MS = 60_000;
+/** Restarts inside that window before we back off (never a fatal stop). */
+const RESTART_SOFT_LIMIT = 20;
+/** Backoff ladder, used only after errors; a normal end restarts immediately. */
+const RESTART_BACKOFF_MS = [0, 60, 200, 500, 1000, 2000];
+/** audio-capture is retried this many times before the session is abandoned. */
+const RECOVERABLE_CAPTURE_RETRIES = 4;
 
 /**
  * Web Speech API wrapper (Chrome / Edge).
@@ -56,6 +73,9 @@ export interface SpeechRecognitionLike {
   onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   onspeechstart: (() => void) | null;
   onspeechend: (() => void) | null;
+  onnomatch: (() => void) | null;
+  onaudiostart: (() => void) | null;
+  onaudioend: (() => void) | null;
 }
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
@@ -128,8 +148,10 @@ export function describeSpeechError(code: string, message?: string): SpeechError
         code,
         title: "No microphone found",
         detail: message || "Chrome could not open an audio input device.",
-        hint: "Plug in or enable a microphone in the system sound settings.",
-        fatal: true,
+        hint:
+          "设备被别的程序占用或已断开。远场场景建议用外接麦克风；如果是 USB 麦克风，换个接口或重新插拔。",
+        // Retried a few times before giving up (see RECOVERABLE_CAPTURE_RETRIES).
+        fatal: false,
       };
     case "network":
       return {
@@ -139,8 +161,9 @@ export function describeSpeechError(code: string, message?: string): SpeechError
           message ||
           "Chrome's built-in recognizer sends audio to Google's speech service, and that request failed.",
         hint:
-          "Check the network/proxy, or use a VPN. If Google is unreachable on this machine, live translation cannot work in this browser.",
-        fatal: true,
+          "网络抖动会自己恢复；如果一直失败，请检查代理/VPN —— 内置识别必须能访问 Google 的语音服务。",
+        // Recoverable: a blip must not end the session (it used to).
+        fatal: false,
       };
     case "language-not-supported":
       return {
@@ -180,12 +203,54 @@ export interface LiveRecognizerHandlers {
   onStatus: (status: SpeechStatus) => void;
   onError: (error: SpeechErrorInfo) => void;
   onSpeechStart?: () => void;
+  /** Fired when a session ends and is restarted, with the reason. */
+  onRestart?: (info: { count: number; reason: RestartReason; gapMs: number }) => void;
+  /** True while the VAD says a voice is present (drives restart eagerness). */
+  isSpeechActive?: () => boolean;
 }
 
-const RESTART_WINDOW_MS = 60_000;
-const RESTART_BUDGET = 12;
-const RESTART_DELAY_MS = 350;
+export type RestartReason = "ended" | "no-speech" | "network" | "aborted" | "audio-capture" | "unknown";
 
+export interface RecognizerDiagnostics {
+  state: SpeechStatus;
+  running: boolean;
+  language: string;
+  restartCount: number;
+  /** Restarts in the current session, with the reason that triggered them. */
+  restartsByReason: Record<RestartReason, number>;
+  lastError: SpeechErrorInfo | null;
+  lastErrorAt: number | null;
+  lastPartial: string;
+  lastFinal: string;
+  /** Text recognised but not yet committed (carried across restarts). */
+  pending: string;
+  sessionStartedAt: number | null;
+  lastEventAt: number | null;
+  lastEvent: string;
+  /** Milliseconds the recognizer was NOT listening because of a restart. */
+  lastGapMs: number;
+  totalGapMs: number;
+  /** Sessions that ended without producing any final result. */
+  emptySessions: number;
+  finalsCount: number;
+}
+
+/**
+ * Wrapper around Chrome's SpeechRecognition built for far-field listening.
+ *
+ * The three things that decide whether a distant speaker keeps their words:
+ *
+ * 1. Restart immediately. Chrome ends the session on silence; the old code
+ *    waited a fixed 350 ms, which is a 350 ms hole in the audio. A normal end
+ *    now restarts on the next tick; only repeated *errors* back off.
+ * 2. Never stop the session because of transient errors. no-speech, network,
+ *    aborted and briefly missing audio are recoverable; the session used to
+ *    shut itself off after 12 restarts in a minute, which a quiet room reaches
+ *    easily.
+ * 3. Keep the unfinished sentence. Interim text that had not been committed
+ *    when the session ended is carried over and merged into the next final, so
+ *    a restart mid-sentence no longer drops the tail.
+ */
 export class LiveRecognizer {
   private recognition: SpeechRecognitionLike | null = null;
   private handlers: LiveRecognizerHandlers;
@@ -193,10 +258,42 @@ export class LiveRecognizer {
   private restartTimes: number[] = [];
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
   private language: string;
+  private pendingInterim = "";
+  /**
+   * Which session produced `pendingInterim`. A final that belongs to the SAME
+   * session supersedes its interim (Chrome revises the text), so merging there
+   * would duplicate the sentence; only text left over from an earlier session
+   * may be merged into a new final.
+   */
+  private pendingSession = 0;
+  private sessionSeq = 0;
+  private consecutiveErrors = 0;
+  private captureRetries = 0;
+  private lastRestartAt: number | null = null;
+  private diagnostics: RecognizerDiagnostics;
 
   constructor(handlers: LiveRecognizerHandlers, language: string) {
     this.handlers = handlers;
     this.language = language;
+    this.diagnostics = {
+      state: "idle",
+      running: false,
+      language,
+      restartCount: 0,
+      restartsByReason: { ended: 0, "no-speech": 0, network: 0, aborted: 0, "audio-capture": 0, unknown: 0 },
+      lastError: null,
+      lastErrorAt: null,
+      lastPartial: "",
+      lastFinal: "",
+      pending: "",
+      sessionStartedAt: null,
+      lastEventAt: null,
+      lastEvent: "",
+      lastGapMs: 0,
+      totalGapMs: 0,
+      emptySessions: 0,
+      finalsCount: 0,
+    };
   }
 
   get isRunning(): boolean {
@@ -205,6 +302,15 @@ export class LiveRecognizer {
 
   get currentLanguage(): string {
     return this.language;
+  }
+
+  getDiagnostics(): RecognizerDiagnostics {
+    return { ...this.diagnostics, pending: this.pendingInterim };
+  }
+
+  /** Text recognised but not yet committed — flushed on stop. */
+  get pendingText(): string {
+    return this.pendingInterim;
   }
 
   start(language?: string): void {
@@ -217,14 +323,27 @@ export class LiveRecognizer {
 
     this.running = true;
     this.restartTimes = [];
+    this.pendingInterim = "";
+    this.pendingSession = 0;
+    this.sessionSeq = 0;
+    this.consecutiveErrors = 0;
+    this.captureRetries = 0;
+    this.diagnostics.running = true;
+    this.diagnostics.language = this.language;
+    this.diagnostics.sessionStartedAt = Date.now();
+    this.diagnostics.lastGapMs = 0;
+    this.diagnostics.totalGapMs = 0;
     this.handlers.onStatus("starting");
+    this.mark("start");
     this.spawn(Ctor);
   }
 
   stop(): void {
     this.running = false;
+    this.diagnostics.running = false;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
+
     const recognition = this.recognition;
     this.recognition = null;
     if (recognition) {
@@ -237,14 +356,21 @@ export class LiveRecognizer {
         /* already stopped */
       }
     }
+
+    // Commit whatever was still in flight so the sentence is not lost.
+    this.flushPending();
     this.handlers.onStatus("idle");
+    this.diagnostics.state = "idle";
+    this.mark("stop");
   }
 
   /** Switch recognition language without dropping the session. */
   setLanguage(language: string): void {
     if (language === this.language) return;
     this.language = language;
+    this.diagnostics.language = language;
     if (!this.running) return;
+    this.flushPending();
     const recognition = this.recognition;
     this.recognition = null;
     if (recognition) {
@@ -258,92 +384,241 @@ export class LiveRecognizer {
     this.spawn(getSpeechRecognitionCtor()!);
   }
 
+  private mark(event: string): void {
+    this.diagnostics.lastEvent = event;
+    this.diagnostics.lastEventAt = Date.now();
+  }
+
+  /** Emit carried-over text as a final result (used on stop / language switch). */
+  private flushPending(): void {
+    const text = this.pendingInterim.trim();
+    this.pendingInterim = "";
+    this.pendingSession = 0;
+    this.diagnostics.pending = "";
+    if (!text) return;
+    this.diagnostics.finalsCount += 1;
+    this.diagnostics.lastFinal = text;
+    this.handlers.onFinal(text);
+  }
+
   private spawn(Ctor: SpeechRecognitionCtor): void {
     if (!this.running) return;
 
+    this.sessionSeq += 1;
+    const sessionId = this.sessionSeq;
     const recognition = new Ctor();
     recognition.lang = this.language;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
+    let producedFinal = false;
+    let producedAnything = false;
+
     recognition.onstart = () => {
-      if (this.running) this.handlers.onStatus("listening");
+      if (!this.running) return;
+      this.handlers.onStatus("listening");
+      this.diagnostics.state = "listening";
+      this.diagnostics.sessionStartedAt = Date.now();
+      // Measure how long we were deaf between sessions.
+      if (this.lastRestartAt) {
+        const gap = Date.now() - this.lastRestartAt;
+        this.diagnostics.lastGapMs = gap;
+        this.diagnostics.totalGapMs += gap;
+      }
+      this.mark("onstart");
     };
 
+    recognition.onaudiostart = () => this.mark("onaudiostart");
+    recognition.onaudioend = () => this.mark("onaudioend");
+
     recognition.onspeechstart = () => {
-      if (this.running) this.handlers.onSpeechStart?.();
+      if (!this.running) return;
+      this.mark("onspeechstart");
+      this.handlers.onSpeechStart?.();
     };
+
+    recognition.onspeechend = () => this.mark("onspeechend");
+
+    recognition.onnomatch = () => this.mark("onnomatch");
 
     recognition.onresult = (event) => {
       if (!this.running) return;
+      producedAnything = true;
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
         const transcript = result[0]?.transcript ?? "";
         if (result.isFinal) {
           const cleaned = transcript.trim();
-          if (cleaned) this.handlers.onFinal(cleaned);
+          if (cleaned) {
+            // A final from THIS session supersedes its own interim (Chrome
+            // revises the text), so it is used as-is. Only text stranded by an
+            // earlier session is merged in — that is the word-loss fix.
+            const carried = this.pendingSession < sessionId ? this.pendingInterim : "";
+            const merged = mergeRecognitionText(carried, cleaned);
+            this.pendingInterim = "";
+            this.pendingSession = 0;
+            this.diagnostics.pending = "";
+            producedFinal = true;
+            this.diagnostics.finalsCount += 1;
+            this.diagnostics.lastFinal = merged;
+            this.mark("onfinal");
+            this.handlers.onFinal(merged);
+          }
         } else {
           interim += transcript;
         }
       }
-      this.handlers.onInterim(interim.trim());
+      const trimmed = interim.trim();
+      if (trimmed) {
+        this.pendingInterim = trimmed;
+        this.pendingSession = sessionId;
+        this.diagnostics.lastPartial = trimmed;
+        this.diagnostics.pending = trimmed;
+      }
+      // Show the whole sentence while speaking: text carried over from the
+      // previous session plus what this session hears so far.
+      const carried = this.pendingSession < sessionId ? this.pendingInterim : "";
+      this.handlers.onInterim(carried ? mergeRecognitionText(carried, trimmed) : trimmed);
     };
 
     recognition.onerror = (event) => {
       const info = describeSpeechError(event.error, event.message);
       if (info.code === "aborted" && !this.running) return;
-      this.handlers.onError(info);
+      this.diagnostics.lastError = info;
+      this.diagnostics.lastErrorAt = Date.now();
+      this.mark(`onerror:${info.code}`);
+
+      const recoverable = !info.fatal;
+      if (recoverable) {
+        this.consecutiveErrors += 1;
+        this.bumpReason(reasonForError(info.code));
+      }
+
+      // audio-capture (device busy/unplugged) gets a few chances, then stops.
+      if (info.code === "audio-capture") {
+        this.captureRetries += 1;
+        if (this.captureRetries > RECOVERABLE_CAPTURE_RETRIES) {
+          this.running = false;
+          this.diagnostics.running = false;
+          this.handlers.onError({
+            ...info,
+            title: "麦克风不可用",
+            detail: `${info.detail ?? ""}（已重试 ${RECOVERABLE_CAPTURE_RETRIES} 次）`.trim(),
+            fatal: true,
+          });
+          this.handlers.onStatus("error");
+          this.diagnostics.state = "error";
+          return;
+        }
+      }
+
       if (info.fatal) {
         this.running = false;
+        this.diagnostics.running = false;
         this.recognition = null;
+        this.handlers.onError(info);
         this.handlers.onStatus("error");
+        this.diagnostics.state = "error";
+        return;
       }
+
+      // Surface it (the UI shows a warning) but keep the session alive.
+      this.handlers.onError(info);
+
+      // A session that ends without producing anything must not count as a
+      // fresh start for the backoff budget.
+      if (!producedAnything) this.diagnostics.emptySessions += 1;
     };
 
     recognition.onend = () => {
       if (!this.running) return;
-      // Chrome ends the session on its own after a pause — restart it.
-      this.scheduleRestart(Ctor);
+      if (!producedFinal && producedAnything) {
+        // Session ended with an uncommitted interim — it stays in pendingInterim
+        // and will be merged into the next final (that is the word-loss fix).
+      }
+      this.scheduleRestart(Ctor, producedAnything ? "ended" : "no-speech");
     };
 
     this.recognition = recognition;
     try {
       recognition.start();
     } catch (err) {
-      // "already started" is thrown if a previous instance is still alive.
       const message = err instanceof Error ? err.message : String(err);
-      if (!/already started/i.test(message)) {
-        this.handlers.onError({
-          code: "start-failed",
-          title: "Could not start recognition",
-          detail: message,
-          fatal: true,
-        });
-        this.running = false;
-        this.handlers.onStatus("error");
+      if (/already started/i.test(message)) {
+        // A previous instance is still alive; retry shortly instead of dying.
+        this.scheduleRestart(Ctor, "aborted");
+        return;
       }
+      this.handlers.onError({
+        code: "start-failed",
+        title: "无法启动识别",
+        detail: message,
+        hint: "刷新页面；如果仍失败，检查是否有扩展或策略阻止了 Web Speech API。",
+        fatal: true,
+      });
+      this.running = false;
+      this.diagnostics.running = false;
+      this.handlers.onStatus("error");
+      this.diagnostics.state = "error";
     }
   }
 
-  private scheduleRestart(Ctor: SpeechRecognitionCtor): void {
+  private bumpReason(reason: RestartReason): void {
+    this.diagnostics.restartsByReason[reason] += 1;
+  }
+
+  /**
+   * Restart the session. A normal end restarts immediately (every millisecond
+   * of delay is audio the recognizer never hears); only repeated errors back
+   * off, and even then we never abandon a running session.
+   */
+  private scheduleRestart(Ctor: SpeechRecognitionCtor, reason: RestartReason): void {
     const now = Date.now();
     this.restartTimes = this.restartTimes.filter((t) => now - t < RESTART_WINDOW_MS);
-    if (this.restartTimes.length >= RESTART_BUDGET) {
-      this.running = false;
-      this.handlers.onError({
-        code: "restart-loop",
-        title: "Recognition keeps stopping",
-        detail: `The recognizer restarted ${RESTART_BUDGET} times in a minute and kept ending immediately.`,
-        hint: "Check the microphone device, or check whether the Google speech service is reachable from this network.",
-        fatal: true,
-      });
-      this.handlers.onStatus("error");
-      return;
-    }
     this.restartTimes.push(now);
-    this.handlers.onStatus("restarting");
-    this.restartTimer = setTimeout(() => this.spawn(Ctor), RESTART_DELAY_MS);
+    this.diagnostics.restartCount += 1;
+    this.bumpReason(reason);
+
+    const speechActive = this.handlers.isSpeechActive?.() ?? false;
+    const overBudget = this.restartTimes.length > RESTART_SOFT_LIMIT;
+    // Immediate restart while someone is talking; small backoff after errors.
+    const step = this.consecutiveErrors === 0 ? 0 : Math.min(this.consecutiveErrors, RESTART_BACKOFF_MS.length - 1);
+    let delay = RESTART_BACKOFF_MS[step];
+    if (overBudget) delay = Math.max(delay, 1500);
+    if (speechActive && this.consecutiveErrors === 0) delay = 0;
+
+    this.handlers.onRestart?.({ count: this.diagnostics.restartCount, reason, gapMs: delay });
+    this.handlers.onStatus(delay > 0 ? "restarting" : "listening");
+    this.diagnostics.state = delay > 0 ? "restarting" : "listening";
+    this.mark(`restart:${reason}`);
+    this.lastRestartAt = now;
+
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined;
+      if (!this.running) return;
+      this.spawn(Ctor);
+    }, delay);
   }
+}
+
+function reasonForError(code: string): RestartReason {
+  if (code === "no-speech") return "no-speech";
+  if (code === "network") return "network";
+  if (code === "audio-capture") return "audio-capture";
+  if (code === "aborted") return "aborted";
+  return "unknown";
+}
+
+/**
+ * Merge carried-over interim text with a new final. Delegates to the DSP
+ * overlap merge so duplicated words around a restart are collapsed.
+ */
+export function mergeRecognitionText(carried: string, next: string): string {
+  const left = carried.trim();
+  const right = next.trim();
+  if (!left) return right;
+  if (!right) return left;
+  return mergeTranscripts(left, right);
 }

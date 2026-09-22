@@ -70,6 +70,10 @@ export const DEFAULT_SETTINGS = {
   keepTranscript: true,
   askPanelOpen: true,
   askUseTranscriptContext: true,
+  // This app exists to translate a room, not a headset: far-field defaults on.
+  farFieldMode: true,
+  micProcessing: "auto" as const,
+  micDeviceId: "",
 };
 
 /* ── Live translation ────────────────────────────────────────────────── */

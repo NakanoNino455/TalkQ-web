@@ -7,6 +7,7 @@ import {
   Mic,
   MicOff,
   Radio,
+  RadioTower,
   RefreshCw,
   ShieldAlert,
   Sparkles,
@@ -44,7 +45,13 @@ export function TranslateView() {
   const interimTargetLang = useTranslateStore((s) => s.interimTargetLang);
   const segments = useTranslateStore((s) => s.segments);
   const error = useTranslateStore((s) => s.error);
+  const warning = useTranslateStore((s) => s.warning);
+  const clearWarning = useTranslateStore((s) => s.clearWarning);
   const micLevel = useTranslateStore((s) => s.micLevel);
+  const analysis = useTranslateStore((s) => s.analysis);
+  const vad = useTranslateStore((s) => s.vad);
+  const refreshDiagnostics = useTranslateStore((s) => s.refreshDiagnostics);
+  const unrecognisedSpeechMs = useTranslateStore((s) => s.unrecognisedSpeechMs);
   const startedAt = useTranslateStore((s) => s.startedAt);
   const toggle = useTranslateStore((s) => s.toggle);
   const clear = useTranslateStore((s) => s.clear);
@@ -77,6 +84,14 @@ export function TranslateView() {
     if (!pinned || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [segments, interim, interimTranslation, pinned]);
+
+  // Keep the VAD snapshot fresh so the weak-signal hint can react (the audio
+  // engine already pushes the meter itself at ~10 Hz).
+  useEffect(() => {
+    if (!listening) return;
+    const id = setInterval(refreshDiagnostics, 500);
+    return () => clearInterval(id);
+  }, [listening, refreshDiagnostics]);
 
   const handleDelete = (id: string) => {
     useTranslateStore.setState((state) => ({
@@ -261,6 +276,24 @@ export function TranslateView() {
 
             <button
               type="button"
+              onClick={() => {
+                updateSettings({ farFieldMode: !settings.farFieldMode });
+                void useTranslateStore.getState().applyAudioSettings();
+              }}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                settings.farFieldMode
+                  ? "border-success/40 bg-success/10 text-success"
+                  : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+              )}
+              title="远场模式（5 米级）：原始采集 + 更灵敏的 VAD + 更长停顿容忍 + 立即重连"
+            >
+              <RadioTower className="h-3 w-3" />
+              远场模式
+            </button>
+
+            <button
+              type="button"
               onClick={() => updateSettings({ livePreview: !settings.livePreview })}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
@@ -290,7 +323,14 @@ export function TranslateView() {
             </button>
           </div>
 
-          <MicMeter level={micLevel} active={status === "listening"} />
+          <MicMeter
+            level={micLevel}
+            active={status === "listening"}
+            noiseFloorDb={vad?.noiseFloorDb ?? analysis?.noiseFloor ?? null}
+            snrDb={vad?.snrDb ?? analysis?.snrDb ?? null}
+            speech={vad?.speech ?? analysis?.speech}
+            clipping={analysis?.clipping}
+          />
         </div>
       </div>
 
@@ -298,6 +338,32 @@ export function TranslateView() {
       {environmentProblem && (
         <Banner tone="warning" icon={<ShieldAlert className="h-3.5 w-3.5" />} title={environmentProblem.title}>
           {environmentProblem.detail}
+        </Banner>
+      )}
+
+      {/* Weak signal: the VAD hears a voice but recognition returns nothing —
+          this is the honest "it is physics, not software" signal. */}
+      {!error && unrecognisedSpeechMs > 2500 && (
+        <Banner tone="warning" icon={<RadioTower className="h-3.5 w-3.5" />} title="听到人声，但识别没有输出">
+          已经检测到 {Math.round(unrecognisedSpeechMs / 1000)} 秒人声却没有文字返回，说明信噪比太低：
+          当前 SNR {vad ? `${vad.snrDb.toFixed(0)} dB` : "未知"}（建议 ≥ 12 dB）。
+          请把设备挪近、改用外接/阵列麦克风，或在设置 → 开发者诊断里跑一遍距离校准看真实数字。
+        </Banner>
+      )}
+
+      {/* Non-fatal recognizer warning (network blip, restarts…) */}
+      {!error && warning && (
+        <Banner
+          tone="warning"
+          icon={<RefreshCw className="h-3.5 w-3.5" />}
+          title="识别已自动恢复"
+          action={
+            <Button variant="ghost" size="sm" onClick={clearWarning}>
+              知道了
+            </Button>
+          }
+        >
+          {warning}
         </Banner>
       )}
 
