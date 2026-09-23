@@ -18,7 +18,8 @@
     "verify:live": "node verification/verify-live.mjs",
     "verify:vad": "node verification/verify-vad.mjs",
     "verify:farfield": "node verification/verify-farfield.mjs",
-    "verify:standalone": "node verification/verify-standalone.mjs"
+    "verify:standalone": "node verification/verify-standalone.mjs",
+    "verify:restart": "node verification/verify-restart.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

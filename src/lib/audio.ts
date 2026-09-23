@@ -175,6 +175,31 @@ export function stopMicrophone(stream: MediaStream | null): void {
 
 /* ── Real-time analyser ──────────────────────────────────────────────── */
 
+let sharedContext: AudioContext | null = null;
+
+/**
+ * One AudioContext per page, reused across start/stop cycles.
+ *
+ * Creating a fresh context on every start leaked them: `close()` is asynchronous
+ * and a browser keeps only a small budget of live AudioContexts, so after a few
+ * start → stop → start cycles the constructor throws. That throw used to escape
+ * the store's start(), leaving the UI stuck on "starting" with no recognition
+ * and no message — the "works the first time, dead the second time" report.
+ */
+function getSharedAudioContext(): AudioContext | null {
+  const AudioContextCtor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return null;
+  if (sharedContext && sharedContext.state !== "closed") return sharedContext;
+  try {
+    sharedContext = new AudioContextCtor();
+  } catch {
+    sharedContext = null;
+  }
+  return sharedContext;
+}
+
 export interface AnalyzerDisplay {
   /** 0..1 for the meter, mapped from dBFS. */
   level: number;
@@ -233,12 +258,9 @@ export class AudioAnalyzer {
   }
 
   start(): void {
-    const AudioContextCtor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) return; // analyser is optional; recognition still works
+    const context = getSharedAudioContext();
+    if (!context) return; // analyser is optional; recognition still works
 
-    const context = new AudioContextCtor();
     const source = context.createMediaStreamSource(this.stream);
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
@@ -251,8 +273,8 @@ export class AudioAnalyzer {
     this.buffer = new Float32Array(analyser.fftSize);
     this.stopped = false;
 
-    // A suspended context (autoplay policy) still yields no frames — resume it.
-    void context.resume().catch(() => {});
+    // A suspended context (autoplay policy or a previous stop) yields no frames.
+    if (context.state === "suspended") void context.resume().catch(() => {});
 
     const sample = () => {
       if (this.stopped || !this.analyser) return;
@@ -345,11 +367,11 @@ export class AudioAnalyzer {
     } catch {
       /* already disconnected */
     }
-    const context = this.context;
+    // Keep the shared context alive: closing it on every stop burned through the
+    // browser's small budget of AudioContexts and broke the next start.
     this.context = null;
     this.source = null;
     this.analyser = null;
-    if (context) void context.close().catch(() => {});
   }
 }
 

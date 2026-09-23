@@ -21,6 +21,13 @@ const RESTART_BACKOFF_MS = [0, 60, 200, 500, 1000, 2000];
  * device that was merely busy could recover.
  */
 const RECOVERABLE_CAPTURE_RETRIES = 8;
+/**
+ * How long Chrome needs to release the microphone after a session ends.
+ * Starting a new session inside this window either throws
+ * "recognition has already started" or yields a session that never fires
+ * onstart — reported as "stop, start again, nothing happens".
+ */
+const SESSION_RELEASE_GRACE_MS = 300;
 
 /**
  * Web Speech API wrapper (Chrome / Edge).
@@ -275,6 +282,8 @@ export class LiveRecognizer {
   private consecutiveErrors = 0;
   private captureRetries = 0;
   private lastRestartAt: number | null = null;
+  /** When the last session ended (used to avoid restarting too early). */
+  private lastEndedAt = 0;
   private diagnostics: RecognizerDiagnostics;
 
   constructor(handlers: LiveRecognizerHandlers, language: string) {
@@ -340,11 +349,28 @@ export class LiveRecognizer {
     this.diagnostics.totalGapMs = 0;
     this.handlers.onStatus("starting");
     this.mark("start");
+
+    /**
+     * Chrome releases the microphone asynchronously after a session ends. Starting
+     * a new session inside that window throws ("recognition has already started")
+     * or produces a session that never fires onstart — reported as "stop then
+     * start again and nothing happens". Wait out the release instead of racing it.
+     */
+    const sinceEnd = this.lastEndedAt ? Date.now() - this.lastEndedAt : Number.POSITIVE_INFINITY;
+    const grace = sinceEnd < SESSION_RELEASE_GRACE_MS ? SESSION_RELEASE_GRACE_MS - sinceEnd : 0;
+    if (grace > 0) {
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = undefined;
+        if (this.running) this.spawn(Ctor);
+      }, grace);
+      return;
+    }
     this.spawn(Ctor);
   }
 
   stop(): void {
     this.running = false;
+    this.lastEndedAt = Date.now();
     this.diagnostics.running = false;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
@@ -538,6 +564,7 @@ export class LiveRecognizer {
     };
 
     recognition.onend = () => {
+      this.lastEndedAt = Date.now();
       if (!this.running) return;
       if (!producedFinal && producedAnything) {
         // Session ended with an uncommitted interim — it stays in pendingInterim
@@ -552,7 +579,10 @@ export class LiveRecognizer {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/already started/i.test(message)) {
-        // A previous instance is still alive; retry shortly instead of dying.
+        // A previous instance is still alive. Back off (do NOT retry at 0 ms —
+        // that spun thousands of times a second and never let the session open).
+        this.consecutiveErrors += 1;
+        this.lastEndedAt = Date.now();
         this.scheduleRestart(Ctor, "aborted");
         return;
       }

@@ -126,6 +126,11 @@ let vadSpeechActive = false;
 let speechSince: number | null = null;
 let unrecognisedSince: number | null = null;
 let lastUnrecognisedWarn = 0;
+/** Fires when a start never reaches "listening" (a session that silently died). */
+let startWatchdog: ReturnType<typeof setTimeout> | undefined;
+/** Notices a microphone that is producing digital silence after a restart. */
+let silenceWatchdog: ReturnType<typeof setInterval> | undefined;
+let silentFrames = 0;
 let previewController: AbortController | null = null;
 let activeController: AbortController | null = null;
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
@@ -287,7 +292,13 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
           set({ unrecognisedSpeechMs: 0 });
           get().pushFinal(text);
         },
-        onStatus: (status) => set({ status }),
+        onStatus: (status) => {
+          if (status === "listening" && startWatchdog) {
+            clearTimeout(startWatchdog);
+            startWatchdog = undefined;
+          }
+          set({ status });
+        },
         onError: (error) => {
           if (error.fatal) {
             set({ error });
@@ -320,9 +331,68 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
       unrecognisedSpeechMs: 0,
     });
     recognizer.start(recognitionLang);
+
+    // Watchdog: a start that never reaches "listening" must not leave the UI
+    // hanging on 启动中 with no explanation (reported as "no reaction").
+    if (startWatchdog) clearTimeout(startWatchdog);
+    startWatchdog = setTimeout(() => {
+      startWatchdog = undefined;
+      const state = get();
+      if (state.status !== "starting") return;
+      recognizer?.stop();
+      recognizer = null;
+      analyzer?.stop();
+      analyzer = null;
+      activeAnalyzer = null;
+      stopMicrophone(micStream);
+      micStream = null;
+      set({
+        status: "error",
+        // Drop the snapshot too, or diagnostics keep reporting a recognizer that
+        // is no longer running.
+        recognition: null,
+        analysis: null,
+        vad: null,
+        micLevel: 0,
+        error: {
+          code: "start-timeout",
+          title: "识别没有启动成功",
+          detail: "浏览器接受了请求但没有开始返回识别结果（可能上一次会话还没有完全释放麦克风）。",
+          hint: "再点一次「开始实时翻译」通常就恢复；若反复失败，请刷新页面。",
+          fatal: true,
+        },
+      });
+    }, 6000);
+
+    // Watchdog: frames arriving but the microphone is digitally silent means the
+    // device is held elsewhere / the wrong input was picked — the classic
+    // "second session hears nothing" case.
+    if (silenceWatchdog) clearInterval(silenceWatchdog);
+    silenceWatchdog = setInterval(() => {
+      const state = get();
+      if (state.status !== "listening") return;
+      const frame = activeAnalyzer?.latestFrame ?? null;
+      if (!frame) return;
+      if (frame.levelDb > -120) {
+        silentFrames = 0;
+        return;
+      }
+      silentFrames += 1;
+      if (silentFrames < 8) return;
+      silentFrames = 0;
+      set({
+        warning:
+          "麦克风没有任何声音数据（-140 dBFS）。通常是被其他程序占用、选错了输入设备，或上一次会话还没释放麦克风 —— 停止后重新开始一次即可。",
+      });
+    }, 500);
   },
 
   stop: () => {
+    if (startWatchdog) clearTimeout(startWatchdog);
+    startWatchdog = undefined;
+    if (silenceWatchdog) clearInterval(silenceWatchdog);
+    silenceWatchdog = undefined;
+    silentFrames = 0;
     recognizer?.stop();
     recognizer = null;
     stopMicrophone(micStream);
@@ -348,6 +418,7 @@ export const useTranslateStore = create<TranslateState>((set, get) => ({
       micLevel: 0,
       analysis: null,
       vad: null,
+      recognition: null,
       unrecognisedSpeechMs: 0,
     });
   },
