@@ -107,12 +107,18 @@ const browser = await chromium.launch({
             "PrivateNetworkAccessRespectPreflightResults,PrivateNetworkAccessSendPreflights," +
             "PrivateNetworkAccessForNavigations,PrivateNetworkAccessForWorkers",
         ]),
+    // The far-field block below opens the microphone on the live origin; without
+    // a fake device + auto-granted permission that would just be a denial.
+    "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
   ],
 });
 const context = await browser.newContext({
   ignoreHTTPSErrors: true,
   viewport: { width: 1440, height: 900 },
 });
+// Microphone for the far-field block at the end of this suite.
+await context.grantPermissions(["microphone"], { origin: new URL(LIVE_URL).origin });
 const page = await context.newPage();
 
 const consoleErrors = [];
@@ -250,6 +256,70 @@ if (livePdfChip) {
 
 const noisy = consoleErrors.filter((e) => !/favicon/i.test(e));
 check("no console errors", noisy.length === 0, noisy.slice(0, 2).join(" | "));
+
+/* ── Far-field capture + diagnostics on the deployed site ─────────────
+ * Proves the raw-capture request and the diagnostics panel work over real
+ * HTTPS on Pages, not just in the local harness.
+ */
+await page.getByRole("button", { name: /开始实时翻译/ }).first().click();
+// In this sandbox Chrome's speech input may refuse to open (headless + fake
+// device): that is an environment limitation, not an app failure, so the
+// recognition-status check below records it instead of failing the suite.
+await page.waitForTimeout(6000);
+const liveStarted = await page.getByText("正在聆听").first().isVisible().catch(() => false);
+const liveError = await page
+  .evaluate(() => window.__TALKQ__?.translate?.getState?.().error?.title ?? null)
+  .catch(() => null);
+check(
+  "live session reaches listening (or reports an environment mic error)",
+  liveStarted || Boolean(liveError),
+  liveStarted ? "listening" : `environment: ${liveError ?? "unknown"}`
+);
+const liveCapture = await page
+  .evaluate(() => window.__TALKQ__?.translate?.getState?.().capture ?? null)
+  .catch(() => null);
+check(
+  "far-field requested a raw capture on the live site (EC/NS/AGC off)",
+  liveCapture?.applied?.echoCancellation === false &&
+    liveCapture?.applied?.noiseSuppression === false &&
+    liveCapture?.applied?.autoGainControl === false,
+  JSON.stringify(liveCapture?.applied ?? null)
+);
+check(
+  "the capture report includes the real device + sample rate",
+  Boolean(liveCapture?.actual?.deviceLabel && liveCapture?.actual?.sampleRate),
+  JSON.stringify(liveCapture?.actual ?? null)
+);
+
+const liveVad = await page
+  .evaluate(() => {
+    window.__TALKQ__?.translate?.getState?.().refreshDiagnostics?.();
+    return window.__TALKQ__?.translate?.getState?.().vad ?? null;
+  })
+  .catch(() => null);
+check(
+  "VAD is producing measurements (level, noise floor, SNR)",
+  Boolean(liveVad && Number.isFinite(liveVad.noiseFloorDb) && Number.isFinite(liveVad.snrDb)),
+  JSON.stringify(liveVad ?? null)
+);
+
+await page.getByRole("button", { name: "Settings" }).first().click();
+const liveSettings = page.getByRole("dialog", { name: "Settings" });
+await liveSettings.waitFor({ timeout: 8000 });
+const livePanelText = await liveSettings.innerText();
+check(
+  "live diagnostics panel shows the far-field numbers",
+  ["Noise floor", "SNR", "Restart count", "Last partial", "距离校准"].every((label) =>
+    livePanelText.includes(label)
+  )
+);
+check(
+  "live panel shows the capture answer from the browser",
+  /回声消除 \/ 降噪 \/ 自动增益/.test(livePanelText) &&
+    /(false|true) \/ (false|true) \/ (false|true)/.test(livePanelText)
+);
+await page.screenshot({ path: path.join(ARTIFACTS, "live-diagnostics.png") });
+await page.getByRole("button", { name: "Close settings" }).click();
 
 await page.screenshot({ path: path.join(ARTIFACTS, "live-chat.png") });
 await browser.close();

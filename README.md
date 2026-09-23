@@ -223,8 +223,9 @@ Chrome 会在停顿后自动结束识别，应用会自动重连（带退避与�
 | **dBFS 电平表 + 噪声底标记 + SNR** | 旧的 `RMS×4.5` 魔法映射让 5 米信号看起来像"麦克风坏了"；现在是固定 −80…0 dBFS 刻度，画出噪声底，直接显示 SNR |
 | **真正的 VAD**（能量 + 过零率 + 自适应噪声底 + 迟滞 + 1.4 s 挂起） | 区分静音 / 噪声 / 人声；**说话中间的短暂停顿不再结束一句话**，避免在停顿处触发会话重启 |
 | **噪声底用 10 分位数估计** | 朴素"最小值跟踪"会被噪声的安静帧一路拖低（实测：−53 dB 的房间被估成 −69 dB），于是把噪声当人声；分位数稳定得多 |
-| **重启策略重写** | 正常结束**立即**重连（不再有 350 ms 空洞）；`no-speech`/`network`/`aborted`/设备短暂占用都不再终止会话，只有权限/语言/设备彻底不可用才停 |
+| **重启策略重写** | 正常结束**立即**重连（不再有 350 ms 空洞）；`no-speech`/`network`/`aborted` 都不再终止会话；设备打不开（audio-capture）改为 8 次重试、间隔逐步拉长到 5 秒（原来 4 次、1 秒内放弃，会把"设备忙"误判为"设备没了"） |
 | **跨会话文本合并** | 会话结束时未提交的 interim 会保留，并与新会话的 final **去重合并** —— 句子被打断也不掉字；同一会话内的 final 仍然覆盖 interim，不重复 |
+| **分析器卡死保护** | 分析器改为 30 Hz 定时采样（`requestAnimationFrame` 在页面不绘制时会停 —— 线上实测会让 VAD 永远停在"有人说话"）；超过 1.2 秒收不到音频帧就强制判定为静音，并提示「收不到音频帧」 |
 | **开发者诊断面板** | 设置 → 开发者诊断：Mic level / RMS / Peak / Noise floor / SNR / Speech / VAD 状态 / 识别状态 / Restart count / Last gap / Last partial / Last final / 重启原因分布 / 浏览器实际给的采集参数 |
 | **距离校准** | 0.5 / 1 / 2 / 3 / 5 米逐档测量：安静 2 秒 → 说话 5 秒 → 记录该距离的噪声底、说话电平、峰值、SNR，给出结论（good / marginal / too-weak）与可复制报告 |
 
@@ -450,7 +451,7 @@ Browser ──fetch()──▶ https://api.deepseek.com
 ```bash
 npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
-npm run verify:vad                    # VAD / 电平 / 合并算法单元测试：43 项断言（纯 Node，无需浏览器）
+npm run verify:vad                    # VAD / 电平 / 合并 / 停顿检测单元测试：47 项断言（纯 Node，无需浏览器）
 npm run verify:farfield               # 远场识别行为（重启不丢字 / 不死会话 / 诊断 / 采集参数）：32 项断言
 npm run verify:e2e                    # 问答/对话 + 品牌/图标/键迁移：74 项断言
 npm run verify:translate              # 实时翻译 + 问答栏 + 文档上传：70 项断言
