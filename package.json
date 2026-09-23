@@ -17,7 +17,8 @@
     "icons": "node scripts/generate-icons.mjs",
     "verify:live": "node verification/verify-live.mjs",
     "verify:vad": "node verification/verify-vad.mjs",
-    "verify:farfield": "node verification/verify-farfield.mjs"
+    "verify:farfield": "node verification/verify-farfield.mjs",
+    "verify:standalone": "node verification/verify-standalone.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
