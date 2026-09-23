@@ -453,6 +453,7 @@ npm i -D playwright-core selfsigned   # 仅验证用，App 本身不依赖
 npm run build
 npm run verify:vad                    # VAD / 电平 / 合并 / 停顿检测单元测试：47 项断言（纯 Node，无需浏览器）
 npm run verify:farfield               # 远场识别行为（重启不丢字 / 不死会话 / 诊断 / 采集参数）：32 项断言
+npm run verify:restart                # 开→关→再开：四轮循环 + 注入竞态/卡死会话：18 项断言
 npm run verify:e2e                    # 问答/对话 + 品牌/图标/键迁移：74 项断言
 npm run verify:translate              # 实时翻译 + 问答栏 + 文档上传：70 项断言
 npm run verify:mobile                 # 手机布局（390×844 触屏视口）：37 项断言

@@ -321,6 +321,48 @@ check(
 await page.screenshot({ path: path.join(ARTIFACTS, "live-diagnostics.png") });
 await page.getByRole("button", { name: "Close settings" }).click();
 
+/* ── Stop → start again on the deployed build with Chrome's real recognizer ──
+ * The reported bug: the first session works, the second one does nothing.
+ * This drives three real cycles and requires each one to reach 正在聆听.
+ */
+const liveStatus = () =>
+  page.evaluate(() => window.__TALKQ__?.translate?.getState?.().status ?? "unknown");
+const startLabel = /开始实时翻译/;
+const stopLabel = /停止翻译/;
+
+for (let cycleNumber = 1; cycleNumber <= 3; cycleNumber += 1) {
+  if ((await liveStatus()) !== "idle") {
+    await page.getByRole("button", { name: stopLabel }).first().click().catch(() => {});
+    await page.waitForTimeout(500);
+  }
+  await page.getByRole("button", { name: startLabel }).first().click();
+  const listening = await page
+    .getByText("正在聆听")
+    .first()
+    .waitFor({ timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
+  const state = await liveStatus();
+  const errorTitle = await page
+    .evaluate(() => window.__TALKQ__?.translate?.getState?.().error?.title ?? null)
+    .catch(() => null);
+  check(
+    `live cycle ${cycleNumber}: restarts and listens again`,
+    listening,
+    `status=${state}${errorTitle ? ` error=${errorTitle}` : ""}`
+  );
+}
+await page.getByRole("button", { name: stopLabel }).first().click().catch(() => {});
+await page.waitForTimeout(600);
+check("live cycles end back at 未开始", (await liveStatus()) === "idle", await liveStatus());
+const liveContext = await page
+  .evaluate(() => {
+    const frames = window.__TALKQ__?.translate?.getState?.().analysis;
+    return { stalled: frames?.stalled ?? null };
+  })
+  .catch(() => null);
+check("the analyser is not stuck after three cycles", liveContext?.stalled !== true, JSON.stringify(liveContext));
+
 await page.screenshot({ path: path.join(ARTIFACTS, "live-chat.png") });
 await browser.close();
 mock.close();

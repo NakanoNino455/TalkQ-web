@@ -10,7 +10,7 @@
 import { createServer } from "node:https";
 import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 /* Optional dev-only tooling — install with:
  *   npm i -D playwright-core selfsigned
